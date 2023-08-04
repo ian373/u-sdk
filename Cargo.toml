@@ -6,3 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+url = "2.4.0"
+percent-encoding = "2.3.0"
+hmac = "0.12.1"
+sha1 = "0.10.5"
+base64 = "0.21.2"
