@@ -7,6 +7,9 @@ use sha1::Sha1;
 use std::collections::BTreeMap;
 use url::form_urlencoded;
 
+mod pub_params;
+mod send_email;
+
 // 定义一个函数，用于计算签名字符串
 fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &str) -> String {
     let canonicalized_query_string = form_urlencoded::Serializer::new(String::new())
