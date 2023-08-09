@@ -5,6 +5,8 @@ use serde::Deserialize;
 pub struct AliConfig {
     pub access_key_id: String,
     pub access_key_secret: String,
+    pub account_name: String,
+    pub to_address: String,
 }
 
 impl AliConfig {

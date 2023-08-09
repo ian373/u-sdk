@@ -1,0 +1,5 @@
+access_key_id = "testid"
+access_key_secret = "secret"
+
+account_name = "example@example.com"
+to_address = "example@example.com"

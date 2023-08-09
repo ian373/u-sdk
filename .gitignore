@@ -1,4 +1,4 @@
 /target
 /Cargo.lock
 
-/tests/test_config/config.toml
+/tests/**/config.toml
