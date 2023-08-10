@@ -13,8 +13,8 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
     let canonicalized_query_string = form_urlencoded::Serializer::new(String::new())
         .extend_pairs(query_params)
         .finish()
-        .replace("+", "%20")
-        .replace("*", "%2A")
+        .replace('+', "%20")
+        .replace('*', "%2A")
         .replace("%7E", "~");
 
     let percent_encode_string = utf8_percent_encode(&canonicalized_query_string, NON_ALPHANUMERIC)
