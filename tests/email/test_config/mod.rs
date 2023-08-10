@@ -12,7 +12,9 @@ pub struct AliConfig {
 impl AliConfig {
     pub fn get_conf() -> Self {
         let conf = Config::builder()
-            .add_source(config::File::with_name("tests/test_config/config.toml"))
+            .add_source(config::File::with_name(
+                "tests/email/test_config/config.toml",
+            ))
             .build()
             .unwrap()
             .try_deserialize::<Self>()
