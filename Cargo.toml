@@ -23,3 +23,4 @@ uuid = { version = "1.4.1", features = ["v4"] }
 [dev-dependencies]
 # 读取配置文件
 config = "0.13.3"
+tokio = { version = "1.30.0", features = ["full"] }

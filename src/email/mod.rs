@@ -2,6 +2,7 @@
 
 pub(crate) mod utils;
 
+pub mod async_send_email;
 pub mod send_email;
 
 use std::collections::BTreeMap;
