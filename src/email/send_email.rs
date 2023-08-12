@@ -8,26 +8,26 @@ const SINGLE_SEND_EMAIL_BASE_URL: &str = "http://dm.aliyuncs.com";
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct SingleSendEmailParams {
-    pub account_name: String,
-    pub address_type: String,
-    pub reply_to_address: String,
-    pub subject: String,
-    pub to_address: String,
+pub struct SingleSendEmailParams<'a> {
+    pub account_name: &'a str,
+    pub address_type: &'a str,
+    pub reply_to_address: &'a str,
+    pub subject: &'a str,
+    pub to_address: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub click_trace: Option<String>,
+    pub click_trace: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_alias: Option<String>,
+    pub from_alias: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub html_body: Option<String>,
+    pub html_body: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tag_name: Option<String>,
+    pub tag_name: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_body: Option<String>,
+    pub text_body: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_address: Option<String>,
+    pub reply_address: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_address_alias: Option<String>,
+    pub reply_address_alias: Option<&'a str>,
 }
 
 pub struct SingleSendEmailSuccessResponse {
@@ -40,14 +40,14 @@ impl EmailSdk {
         // 添加剩余的公共参数
         let mut params_map: BTreeMap<String, String> = BTreeMap::new();
         params_map.append(&mut self.known_params.clone());
-        params_map.insert("Timestamp".to_string(), now_iso8601());
-        params_map.insert("SignatureNonce".to_string(), get_uuid());
+        params_map.insert("Timestamp".to_owned(), now_iso8601());
+        params_map.insert("SignatureNonce".to_owned(), get_uuid());
 
         // 添加特定api参数
         let mut api_params_map: BTreeMap<String, String> =
             serde_json::from_value(serde_json::to_value(api_params).unwrap()).unwrap();
         params_map.append(&mut api_params_map);
-        params_map.insert("Action".to_string(), "SingleSendMail".to_string());
+        params_map.insert("Action".to_owned(), "SingleSendMail".to_owned());
 
         // 计算和添加签名
         let signature = sign_params(&params_map, &self.access_key_secret);

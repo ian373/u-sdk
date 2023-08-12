@@ -21,14 +21,14 @@ impl EmailSdk {
         region_id: Option<String>,
     ) -> Self {
         let mut map = BTreeMap::new();
-        map.insert("Format".to_string(), "JSON".to_string());
-        map.insert("Version".to_string(), "2015-11-23".to_string());
-        map.insert("AccessKeyId".to_string(), access_key_id);
-        map.insert("SignatureMethod".to_string(), "HMAC-SHA1".to_string());
-        map.insert("SignatureVersion".to_string(), "1.0".to_string());
+        map.insert("Format".to_owned(), "JSON".to_owned());
+        map.insert("Version".to_owned(), "2015-11-23".to_owned());
+        map.insert("AccessKeyId".to_owned(), access_key_id);
+        map.insert("SignatureMethod".to_owned(), "HMAC-SHA1".to_owned());
+        map.insert("SignatureVersion".to_owned(), "1.0".to_owned());
 
         if let Some(r) = region_id {
-            map.insert("RegionId".to_string(), r);
+            map.insert("RegionId".to_owned(), r);
         }
 
         Self {
