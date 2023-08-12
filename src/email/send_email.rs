@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use super::utils::{get_uuid, now_iso8601, sign_params};
 use super::EmailSdk;
 
-const SINGLE_SEND_EMAIL_BASE_URL: &str = "http://dm.aliyuncs.com";
+pub(crate) const SINGLE_SEND_EMAIL_BASE_URL: &str = "http://dm.aliyuncs.com";
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -30,13 +30,8 @@ pub struct SingleSendEmailParams<'a> {
     pub reply_address_alias: Option<&'a str>,
 }
 
-pub struct SingleSendEmailSuccessResponse {
-    pub env_id: String,
-    pub request_id: String,
-}
-
 impl EmailSdk {
-    pub fn single_send_email(&self, api_params: &SingleSendEmailParams) {
+    pub async fn single_send_email(&self, api_params: &SingleSendEmailParams<'_>) {
         // 添加剩余的公共参数
         let mut params_map: BTreeMap<String, String> = BTreeMap::new();
         params_map.append(&mut self.known_params.clone());
@@ -57,10 +52,11 @@ impl EmailSdk {
             .http_client
             .post(SINGLE_SEND_EMAIL_BASE_URL)
             .form(&params_map)
-            .send();
+            .send()
+            .await;
         match a {
             Ok(resp) => {
-                println!("{:?}", resp.text().unwrap())
+                println!("{:?}", resp.text().await.unwrap())
             }
             Err(e) => {
                 println!("{:?}", e)

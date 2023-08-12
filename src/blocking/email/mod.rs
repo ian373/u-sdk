@@ -1,7 +1,3 @@
-//! ali cloud email sdk
-
-pub(crate) mod utils;
-
 pub mod send_email;
 
 use std::collections::BTreeMap;
@@ -10,7 +6,7 @@ pub struct EmailSdk {
     // 公共参数固定不变的部分
     known_params: BTreeMap<String, String>,
     access_key_secret: String,
-    http_client: reqwest::Client,
+    http_client: reqwest::blocking::Client,
 }
 
 impl EmailSdk {
@@ -33,7 +29,7 @@ impl EmailSdk {
         Self {
             known_params: map,
             access_key_secret,
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::blocking::Client::new(),
         }
     }
 }
