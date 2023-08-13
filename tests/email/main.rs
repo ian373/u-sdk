@@ -1,6 +1,7 @@
 mod test_config;
 use u_ali_sdk::blocking::email as email_blocking;
 use u_ali_sdk::email;
+use u_ali_sdk::error::Error;
 
 // 获取本地配置信息测试
 #[test]
@@ -39,16 +40,28 @@ async fn single_send_email() {
         account_name: &conf.account_name,
         address_type: "1",
         reply_to_address: "false",
-        subject: "test_subject",
+        subject: "这是一个异步发送邮件测试",
         to_address: &conf.to_address,
         click_trace: None,
         from_alias: None,
-        html_body: Some("这是一个异步的测试 123"),
+        html_body: Some("这是一个异步的测试"),
         tag_name: None,
         text_body: None,
         reply_address: None,
         reply_address_alias: None,
     };
 
-    client.single_send_email(&params).await;
+    match client.single_send_email(&params).await {
+        Ok(data) => {
+            println!("ok: {:?}", data);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(faild_resp) => {
+                println!("faild! response text: {}", faild_resp.text().await.unwrap());
+            }
+            Error::ReqwestError(e) => {
+                println!("error: {:?}", e);
+            }
+        },
+    }
 }

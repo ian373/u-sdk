@@ -2,3 +2,4 @@
 
 pub mod blocking;
 pub mod email;
+pub mod error;

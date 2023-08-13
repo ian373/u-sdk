@@ -1,8 +1,10 @@
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::utils::{get_uuid, now_iso8601, sign_params};
 use super::EmailSdk;
+use crate::error::Error;
 
 pub(crate) const SINGLE_SEND_EMAIL_BASE_URL: &str = "http://dm.aliyuncs.com";
 
@@ -30,8 +32,18 @@ pub struct SingleSendEmailParams<'a> {
     pub reply_address_alias: Option<&'a str>,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Response {
+    pub env_id: String,
+    pub request_id: String,
+}
+
 impl EmailSdk {
-    pub async fn single_send_email(&self, api_params: &SingleSendEmailParams<'_>) {
+    pub async fn single_send_email(
+        &self,
+        api_params: &SingleSendEmailParams<'_>,
+    ) -> Result<Response, Error> {
         // 添加剩余的公共参数
         let mut params_map: BTreeMap<String, String> = BTreeMap::new();
         params_map.append(&mut self.known_params.clone());
@@ -48,19 +60,17 @@ impl EmailSdk {
         let signature = sign_params(&params_map, &self.access_key_secret);
         params_map.insert("Signature".to_owned(), signature);
 
-        let a = self
+        let resp = self
             .http_client
             .post(SINGLE_SEND_EMAIL_BASE_URL)
             .form(&params_map)
             .send()
-            .await;
-        match a {
-            Ok(resp) => {
-                println!("{:?}", resp.text().await.unwrap())
-            }
-            Err(e) => {
-                println!("{:?}", e)
-            }
+            .await?;
+
+        if resp.status() == StatusCode::OK {
+            Ok(resp.json::<Response>().await.unwrap())
+        } else {
+            Err(Error::StatusCodeNot200Resp(resp))
         }
     }
 }
