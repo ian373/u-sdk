@@ -65,3 +65,23 @@ async fn single_send_email() {
         },
     }
 }
+
+#[tokio::test]
+async fn desc_account_summary_test() {
+    let conf = test_config::AliConfig::get_conf();
+    let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
+
+    match client.desc_account_summary().await {
+        Ok(data) => {
+            println!("ok: {:?}", data);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(faild_resp) => {
+                println!("faild! response text: {}", faild_resp.text().await.unwrap());
+            }
+            Error::ReqwestError(e) => {
+                println!("error: {:?}", e);
+            }
+        },
+    }
+}

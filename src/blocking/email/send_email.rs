@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use super::EmailSdk;
-use crate::email::send_email::{SingleSendEmailParams, SINGLE_SEND_EMAIL_BASE_URL};
+use crate::email::send_email::SingleSendEmailParams;
 use crate::email::utils::{get_uuid, now_iso8601, sign_params};
+use crate::email::BASE_URL;
 
 impl EmailSdk {
     pub fn single_send_email(&self, api_params: &SingleSendEmailParams) {
@@ -22,11 +23,7 @@ impl EmailSdk {
         let signature = sign_params(&params_map, &self.access_key_secret);
         params_map.insert("Signature".to_owned(), signature);
 
-        let a = self
-            .http_client
-            .post(SINGLE_SEND_EMAIL_BASE_URL)
-            .form(&params_map)
-            .send();
+        let a = self.http_client.post(BASE_URL).form(&params_map).send();
         match a {
             Ok(resp) => {
                 println!("{:?}", resp.text().unwrap())

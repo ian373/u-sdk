@@ -3,10 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::utils::{get_uuid, now_iso8601, sign_params};
-use super::EmailSdk;
+use super::{EmailSdk, BASE_URL};
 use crate::error::Error;
-
-pub(crate) const SINGLE_SEND_EMAIL_BASE_URL: &str = "http://dm.aliyuncs.com";
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -62,7 +60,7 @@ impl EmailSdk {
 
         let resp = self
             .http_client
-            .post(SINGLE_SEND_EMAIL_BASE_URL)
+            .post(BASE_URL)
             .form(&params_map)
             .send()
             .await?;
