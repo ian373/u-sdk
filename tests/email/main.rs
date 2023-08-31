@@ -85,3 +85,30 @@ async fn desc_account_summary_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn query_domain_by_param_test() {
+    let conf = test_config::AliConfig::get_conf();
+    let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
+
+    let api_params = email::domain::APIParams {
+        key_word: None,
+        page_no: None,
+        page_size: None,
+        status: None,
+    };
+
+    match client.query_domain_by_param(api_params).await {
+        Ok(data) => {
+            println!("ok: {:?}", data);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(faild_resp) => {
+                println!("faild! response text: {}", faild_resp.text().await.unwrap());
+            }
+            Error::ReqwestError(e) => {
+                println!("error: {:?}", e);
+            }
+        },
+    }
+}

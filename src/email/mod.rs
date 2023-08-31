@@ -3,6 +3,7 @@
 pub(crate) mod utils;
 
 pub mod account;
+pub mod domain;
 pub mod send_email;
 
 use std::collections::BTreeMap;
