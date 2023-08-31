@@ -112,3 +112,23 @@ async fn query_domain_by_param_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn get_ip_protection_test() {
+    let conf = test_config::AliConfig::get_conf();
+    let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
+
+    match client.get_ip_protection().await {
+        Ok(data) => {
+            println!("ok: {:?}", data);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(faild_resp) => {
+                println!("faild! response text: {}", faild_resp.text().await.unwrap());
+            }
+            Error::ReqwestError(e) => {
+                println!("error: {:?}", e);
+            }
+        },
+    }
+}
