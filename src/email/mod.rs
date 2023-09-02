@@ -9,7 +9,7 @@ pub mod send_email;
 
 use std::collections::BTreeMap;
 
-pub(crate) const BASE_URL: &str = "http://dm.aliyuncs.com";
+pub(crate) const BASE_URL: &str = "https://dm.aliyuncs.com";
 
 pub struct EmailSdk {
     // 公共参数固定不变的部分
