@@ -62,6 +62,7 @@ async fn single_send_email() {
             Error::ReqwestError(e) => {
                 println!("error: {:?}", e);
             }
+            _ => println!("error: {}", e),
         },
     }
 }
@@ -82,6 +83,7 @@ async fn desc_account_summary_test() {
             Error::ReqwestError(e) => {
                 println!("error: {:?}", e);
             }
+            _ => println!("error: {}", e),
         },
     }
 }
@@ -109,6 +111,7 @@ async fn query_domain_by_param_test() {
             Error::ReqwestError(e) => {
                 println!("error: {:?}", e);
             }
+            _ => println!("error: {}", e),
         },
     }
 }
@@ -129,6 +132,7 @@ async fn get_ip_protection_test() {
             Error::ReqwestError(e) => {
                 println!("error: {:?}", e);
             }
+            _ => println!("error: {}", e),
         },
     }
 }
