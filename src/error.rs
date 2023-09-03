@@ -4,4 +4,6 @@ pub enum Error {
     ReqwestError(#[from] reqwest::Error),
     #[error("response status code is not 200")]
     StatusCodeNot200Resp(reqwest::Response),
+    #[error("simple error")]
+    CommonError(String),
 }
