@@ -59,7 +59,7 @@ fn get_canonicalized_resource(
     Ok(s)
 }
 
-// TODO [warn(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub fn sign_authorization(
     access_key_id: &str,
     access_key_secret: &str,
