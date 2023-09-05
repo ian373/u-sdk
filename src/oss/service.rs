@@ -4,7 +4,7 @@ use crate::error::Error;
 use crate::oss::utils::sign_authorization;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use url::Url;
 
@@ -19,12 +19,61 @@ pub struct ListBucketsQueryParams<'a> {
     pub max_keys: Option<&'a str>,
 }
 
+// region:    --- ListBucketResult
+
+/// 如果属性值为`None`，如：`prefix: None`，表示返回的xml中没有该标签`<Prefix/>`。
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListAllMyBucketsResult {
+    pub prefix: Option<String>,
+    pub marker: Option<String>,
+    pub max_keys: Option<u32>,
+    pub is_truncated: Option<bool>,
+    pub next_marker: Option<String>,
+    pub owner: Owner,
+    /// 你可能会对`buckets`字段的结构感到奇怪，不过没办法，
+    /// [quick-xml映射](https://docs.rs/quick-xml/latest/quick_xml/de/index.html#sequences-xsall-and-xssequence-xml-schema-types)
+    /// 是要求这么写的。
+    pub buckets: Buckets,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Owner {
+    #[serde(rename = "ID")]
+    pub id: String,
+    pub display_name: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Buckets {
+    pub bucket: Vec<Bucket>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Bucket {
+    pub name: String,
+    pub comment: String,
+    pub creation_date: String,
+    pub location: String,
+    pub extranet_endpoint: String,
+    pub intranet_endpoint: String,
+    pub region: String,
+    pub storage_class: String,
+    // 文档中说有这个字段，实际请求又发现没有...
+    // pub resource_group_id: String,
+}
+
+// endregion: --- ListBucketResult
+
 impl OSSClient {
     pub async fn list_buckets(
         &self,
         x_oss_resource_group_id: Option<&str>,
         query_params: ListBucketsQueryParams<'_>,
-    ) -> Result<String, Error> {
+    ) -> Result<ListAllMyBucketsResult, Error> {
         let query_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(query_params).unwrap()).unwrap();
 
@@ -68,8 +117,19 @@ impl OSSClient {
             })
             .collect();
 
-        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        let resp_text = self
+            .http_client
+            .get(url)
+            .headers(header_map)
+            .send()
+            .await?
+            .text()
+            .await?;
 
-        Ok(resp.text().await.unwrap())
+        // println!("resp_text:\n{}", resp_text);
+
+        let res = quick_xml::de::from_str(&resp_text)?;
+
+        Ok(res)
     }
 }

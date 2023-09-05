@@ -18,5 +18,5 @@ async fn list_buckets_test() {
         max_keys: None,
     };
     let res = client.list_buckets(None, query).await.unwrap();
-    println!("res:\n{}", res);
+    println!("res:\n{:?}", res);
 }
