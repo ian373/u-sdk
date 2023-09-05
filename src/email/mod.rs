@@ -1,4 +1,4 @@
-//! ali cloud email sdk
+//! 邮件推送sdk
 
 pub(crate) mod utils;
 
