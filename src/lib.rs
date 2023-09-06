@@ -17,7 +17,12 @@
 //! 理论上`blocking`API和异步API基本相同
 //!
 
+#[cfg(feature = "blocking")]
 pub mod blocking;
+
+#[cfg(feature = "email")]
 pub mod email;
-pub mod error;
+#[cfg(feature = "oss")]
 pub mod oss;
+
+pub mod error;

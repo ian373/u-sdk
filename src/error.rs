@@ -9,6 +9,7 @@ pub enum Error {
     #[error("response status code is not 200")]
     StatusCodeNot200Resp(reqwest::Response),
     /// 出现该情况，一般认为是对API返回的xml数据反序列失败，说明代码中反序列的结构体缺少属性或存在错误属性，返回[quick_xml::DeError]
+    #[cfg(feature = "oss")]
     #[error("xml deserialize error")]
     XMLDeError(#[from] quick_xml::DeError),
     /// 一般性错误，通常出现在使用`.unwrap()`的情况
