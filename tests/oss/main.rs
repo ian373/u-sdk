@@ -20,3 +20,20 @@ async fn list_buckets_test() {
     let res = client.list_buckets(None, query).await.unwrap();
     println!("res:\n{:?}", res);
 }
+
+#[tokio::test]
+async fn describe_regions_test() {
+    let conf = test_config::AliConfig::get_conf();
+    let client = oss::OSSClient::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.endpoint,
+        conf.bucket_name,
+    );
+
+    let res = client
+        .describe_regions(Some("oss-cn-hangzhou"))
+        .await
+        .unwrap();
+    println!("res:\n{:?}", res);
+}

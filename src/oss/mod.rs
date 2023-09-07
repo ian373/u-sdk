@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 pub mod bucket;
+pub mod region;
 pub mod service;
 
 pub(crate) mod utils;
