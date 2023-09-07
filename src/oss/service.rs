@@ -19,11 +19,12 @@ pub struct ListBucketsQueryParams<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub marker: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    // TODO 这里可以改为Option<u16>，,1~1000，因为max_keys输入的时候是必是数字，
+    // 这样写更不容易出错，但这要就需要解决类型问题，因为这个结构体需要序列化，类型必须同一，想办法解决
     pub max_keys: Option<&'a str>,
 }
 
 // region:    --- ListBucketResult
-
 /// 如果属性值为`None`，如：`prefix: None`，表示返回的xml中没有该标签`<Prefix/>`。
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -65,7 +66,6 @@ pub struct Bucket {
     // 文档中说有这个字段，实际请求又发现没有...
     // pub resource_group_id: String,
 }
-
 // endregion: --- ListBucketResult
 
 impl OSSClient {
