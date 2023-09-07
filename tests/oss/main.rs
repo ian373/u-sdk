@@ -37,3 +37,35 @@ async fn describe_regions_test() {
         .unwrap();
     println!("res:\n{:?}", res);
 }
+
+#[tokio::test]
+async fn put_bucket_test() {
+    use oss::bucket::{CreateBucketConfiguration, PutBucketHeader};
+
+    let conf = test_config::AliConfig::get_conf();
+    let client = oss::OSSClient::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.endpoint,
+        conf.bucket_name,
+    );
+
+    let x_oss_header = PutBucketHeader {
+        x_oss_acl: None,
+        x_oss_resource_group_id: None,
+    };
+    let params = CreateBucketConfiguration {
+        storage_class: None,
+        data_redundancy_type: None,
+    };
+
+    client
+        .put_bucket(
+            x_oss_header,
+            params,
+            "oss-cn-hangzhou.aliyuncs.com",
+            "example-oss",
+        )
+        .await
+        .unwrap();
+}
