@@ -3,7 +3,10 @@ use super::OSSClient;
 use crate::error::Error;
 use crate::oss::utils::sign_authorization;
 
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::{
+    header::{HeaderMap, HeaderName, HeaderValue},
+    StatusCode,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use url::Url;
@@ -31,9 +34,6 @@ pub struct ListAllMyBucketsResult {
     pub is_truncated: Option<bool>,
     pub next_marker: Option<String>,
     pub owner: Owner,
-    /// 你可能会对`buckets`字段的结构感到奇怪，不过没办法，
-    /// [quick-xml映射](https://docs.rs/quick-xml/latest/quick_xml/de/index.html#sequences-xsall-and-xssequence-xml-schema-types)
-    /// 是要求这么写的。
     pub buckets: Buckets,
 }
 
@@ -117,18 +117,16 @@ impl OSSClient {
             })
             .collect();
 
-        let resp_text = self
-            .http_client
-            .get(url)
-            .headers(header_map)
-            .send()
-            .await?
-            .text()
-            .await?;
+        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        let text = resp.text().await?;
 
         // println!("resp_text:\n{}", resp_text);
 
-        let res = quick_xml::de::from_str(&resp_text)?;
+        let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
     }
