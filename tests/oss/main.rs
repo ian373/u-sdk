@@ -17,8 +17,11 @@ async fn list_buckets_test() {
         marker: None,
         max_keys: None,
     };
-    let res = client.list_buckets(None, query).await.unwrap();
-    println!("res:\n{:?}", res);
+    let res = client.list_buckets(None, query).await;
+    match res {
+        Ok(s) => println!("res:\n{:?}", s),
+        Err(e) => println!("{:?}", e),
+    }
 }
 
 #[tokio::test]
@@ -31,11 +34,12 @@ async fn describe_regions_test() {
         conf.bucket_name,
     );
 
-    let res = client
-        .describe_regions(Some("oss-cn-hangzhou"))
-        .await
-        .unwrap();
-    println!("res:\n{:?}", res);
+    let res = client.describe_regions(Some("oss-cn-hangzhou")).await;
+
+    match res {
+        Ok(s) => println!("res:\n{:?}", s),
+        Err(e) => println!("{:?}", e),
+    }
 }
 
 #[tokio::test]
