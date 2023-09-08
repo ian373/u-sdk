@@ -3,6 +3,7 @@ use super::OSSClient;
 use crate::error::Error;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::StatusCode;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -88,7 +89,9 @@ impl OSSClient {
             .send()
             .await?;
 
-        println!("text: {}", resp.text().await?);
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
 
         Ok(())
     }

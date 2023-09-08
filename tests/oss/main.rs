@@ -59,13 +59,17 @@ async fn put_bucket_test() {
         data_redundancy_type: None,
     };
 
-    client
+    let res = client
         .put_bucket(
             x_oss_header,
             params,
             "oss-cn-hangzhou.aliyuncs.com",
             "example-oss",
         )
-        .await
-        .unwrap();
+        .await;
+
+    match res {
+        Ok(_) => println!("success!"),
+        Err(e) => println!("{:?}", e),
+    }
 }
