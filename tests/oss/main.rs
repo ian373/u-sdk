@@ -1,6 +1,6 @@
 mod test_config;
 
-// use u_ali_sdk::error::Error;
+use u_ali_sdk::error::Error;
 use u_ali_sdk::oss;
 
 #[tokio::test]
@@ -75,5 +75,38 @@ async fn put_bucket_test() {
     match res {
         Ok(_) => println!("success!"),
         Err(e) => println!("{:?}", e),
+    }
+}
+
+#[tokio::test]
+async fn list_objects_v2_test() {
+    use oss::bucket::ListObjectsV2Query;
+
+    let conf = test_config::AliConfig::get_conf();
+    let client = oss::OSSClient::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.endpoint,
+        conf.bucket_name,
+    );
+
+    let params = ListObjectsV2Query {
+        delimiter: None,
+        start_after: Some("t"),
+        continuation_token: None,
+        max_keys: Some("3"),
+        prefix: Some("test/"),
+        encoding_type: None,
+        fetch_owner: Some("true"),
+    };
+
+    let res = client.list_objects_v2(params).await;
+
+    match res {
+        Ok(s) => println!("res:\n {:?}", s),
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("error: {}", e),
+        },
     }
 }

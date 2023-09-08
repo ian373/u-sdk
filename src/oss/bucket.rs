@@ -1,12 +1,16 @@
+//! 只实现了小部分API
+
 use super::utils::{now_gmt, sign_authorization};
 use super::OSSClient;
 use crate::error::Error;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::StatusCode;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use url::Url;
 
+// region:    --- put bucket
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct PutBucketHeader<'a> {
@@ -26,6 +30,75 @@ pub struct CreateBucketConfiguration<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_redundancy_type: Option<&'a str>,
 }
+// endregion: --- put bucket
+
+// region:    --- list objects v2
+/// `list-type`将自动设为2
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListObjectsV2Query<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delimiter: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_after: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuation_token: Option<&'a str>,
+    // 最好改为u16类型
+    /// `u16`类型
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_keys: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_type: Option<&'a str>,
+    /// `bool`类型
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetch_owner: Option<&'a str>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListBucketResult {
+    pub contents: Option<Vec<Content>>,
+    pub common_prefixes: Option<CommonPrefixes>,
+    pub delimiter: String,
+    pub encoding_type: Option<String>,
+    pub is_truncated: bool,
+    pub start_after: Option<String>,
+    pub max_keys: u16,
+    pub name: String,
+    pub prefix: String,
+    pub continuation_token: Option<u32>,
+    pub key_count: u32,
+    pub next_continuation_token: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct CommonPrefixes {
+    pub prefix: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Content {
+    pub owner: Option<Owner>,
+    pub e_tag: String,
+    pub key: String,
+    pub last_modified: String,
+    pub size: u32,
+    pub storage_class: String,
+    pub restore_info: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Owner {
+    pub display_name: String,
+    #[serde(rename = "ID")]
+    pub id: String,
+}
+// endregion: --- list objects v2
 
 impl OSSClient {
     pub async fn put_bucket(
@@ -94,5 +167,52 @@ impl OSSClient {
         }
 
         Ok(())
+    }
+
+    pub async fn list_objects_v2(
+        &self,
+        query_params: ListObjectsV2Query<'_>,
+    ) -> Result<ListBucketResult, Error> {
+        let query_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(query_params).unwrap()).unwrap();
+
+        let mut url = Url::parse_with_params(&self.bucket_url(), query_map).unwrap();
+        // 添加固定的query
+        url.query_pairs_mut().append_pair("list-type", "2");
+
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "GET",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(&self.bucket),
+            None,
+        );
+
+        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+
+        let header_map: HeaderMap = common_header
+            .iter()
+            .map(|(k, v)| {
+                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+                (name, value)
+            })
+            .collect();
+
+        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        let text = resp.text().await?;
+        // println!("text: {}", text);
+        let res = quick_xml::de::from_str(&text)?;
+
+        Ok(res)
     }
 }
