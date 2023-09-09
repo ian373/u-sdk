@@ -3,15 +3,20 @@ mod test_config;
 use u_ali_sdk::error::Error;
 use u_ali_sdk::oss;
 
-#[tokio::test]
-async fn list_buckets_test() {
+fn get_oss_client() -> oss::OSSClient {
     let conf = test_config::AliConfig::get_conf();
-    let client = oss::OSSClient::new(
+    oss::OSSClient::new(
         conf.access_key_id,
         conf.access_key_secret,
         conf.endpoint,
         conf.bucket_name,
-    );
+    )
+}
+
+#[tokio::test]
+async fn list_buckets_test() {
+    let client = get_oss_client();
+
     let query = oss::service::ListBucketsQueryParams {
         prefix: None,
         marker: None,
@@ -26,13 +31,7 @@ async fn list_buckets_test() {
 
 #[tokio::test]
 async fn describe_regions_test() {
-    let conf = test_config::AliConfig::get_conf();
-    let client = oss::OSSClient::new(
-        conf.access_key_id,
-        conf.access_key_secret,
-        conf.endpoint,
-        conf.bucket_name,
-    );
+    let client = get_oss_client();
 
     let res = client.describe_regions(Some("oss-cn-hangzhou")).await;
 
@@ -46,13 +45,7 @@ async fn describe_regions_test() {
 async fn put_bucket_test() {
     use oss::bucket::{CreateBucketConfiguration, PutBucketHeader};
 
-    let conf = test_config::AliConfig::get_conf();
-    let client = oss::OSSClient::new(
-        conf.access_key_id,
-        conf.access_key_secret,
-        conf.endpoint,
-        conf.bucket_name,
-    );
+    let client = get_oss_client();
 
     let x_oss_header = PutBucketHeader {
         x_oss_acl: None,
@@ -82,13 +75,7 @@ async fn put_bucket_test() {
 async fn list_objects_v2_test() {
     use oss::bucket::ListObjectsV2Query;
 
-    let conf = test_config::AliConfig::get_conf();
-    let client = oss::OSSClient::new(
-        conf.access_key_id,
-        conf.access_key_secret,
-        conf.endpoint,
-        conf.bucket_name,
-    );
+    let client = get_oss_client();
 
     let params = ListObjectsV2Query {
         delimiter: None,
@@ -113,13 +100,7 @@ async fn list_objects_v2_test() {
 
 #[tokio::test]
 async fn get_bucket_info_test() {
-    let conf = test_config::AliConfig::get_conf();
-    let client = oss::OSSClient::new(
-        conf.access_key_id,
-        conf.access_key_secret,
-        conf.endpoint,
-        conf.bucket_name,
-    );
+    let client = get_oss_client();
 
     let res = client.get_bucket_info(None).await;
 
