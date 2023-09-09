@@ -61,7 +61,7 @@ async fn put_bucket_test() {
             x_oss_header,
             params,
             "oss-cn-hangzhou.aliyuncs.com",
-            "example-oss",
+            "example-oss-todel",
         )
         .await;
 
@@ -102,7 +102,7 @@ async fn list_objects_v2_test() {
 async fn get_bucket_info_test() {
     let client = get_oss_client();
 
-    let res = client.get_bucket_info(None).await;
+    let res = client.get_bucket_info(Some("example-oss-todel")).await;
 
     match res {
         Ok(s) => println!("res:\n {:?}", s),
@@ -117,7 +117,7 @@ async fn get_bucket_info_test() {
 async fn get_bucket_location_test() {
     let client = get_oss_client();
 
-    let res = client.get_bucket_location(None).await;
+    let res = client.get_bucket_location(Some("example-oss-todel")).await;
 
     match res {
         Ok(s) => println!("res:\n {}", s),
