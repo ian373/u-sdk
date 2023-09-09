@@ -108,7 +108,7 @@ async fn get_bucket_info_test() {
         Ok(s) => println!("res:\n {:?}", s),
         Err(e) => match e {
             Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("error: {}", e),
+            _ => println!("{}", e),
         },
     }
 }

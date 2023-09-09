@@ -201,7 +201,7 @@ impl OSSClient {
         // };
         // 理论上当params两个属性值都为None时应该rq_xml应该为""，但是此时解析结果为：<CreateBucketConfiguration/>也不影响请求
         let rq_xml = quick_xml::se::to_string(&params).unwrap();
-        println!("rq_xml: {}", rq_xml);
+        // println!("rq_xml: {}", rq_xml);
         let resp = self
             .http_client
             .put(format!("https://{}.{}", bucket_name, endpoint))
@@ -259,7 +259,10 @@ impl OSSClient {
 
         let text = resp.text().await?;
         // println!("text: {}", text);
-        let res = quick_xml::de::from_str(&text)?;
+        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+            source: e,
+            origin_text: text,
+        })?;
 
         Ok(res)
     }
@@ -312,7 +315,10 @@ impl OSSClient {
 
         let text = resp.text().await?;
         // println!("resp_text:\n{}", text);
-        let res = quick_xml::de::from_str(&text)?;
+        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+            source: e,
+            origin_text: text,
+        })?;
 
         Ok(res)
     }

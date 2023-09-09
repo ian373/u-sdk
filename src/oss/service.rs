@@ -126,7 +126,10 @@ impl OSSClient {
 
         // println!("resp_text:\n{}", resp_text);
 
-        let res = quick_xml::de::from_str(&text)?;
+        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+            source: e,
+            origin_text: text,
+        })?;
 
         Ok(res)
     }
