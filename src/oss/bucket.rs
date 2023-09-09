@@ -148,6 +148,14 @@ pub struct BucketPolicy {
 }
 // endregion: --- get bucket info
 
+// xml数据为："<LocationConstraint>oss-cn-hangzhou</LocationConstraint>"，
+// 这种情况下使用xml反序列化比较特殊，写法得类似于下面这样：
+#[derive(Deserialize)]
+struct LocationConstraint {
+    #[serde(rename = "$text")]
+    pub field: String,
+}
+
 impl OSSClient {
     pub async fn put_bucket(
         &self,
@@ -321,5 +329,60 @@ impl OSSClient {
         })?;
 
         Ok(res)
+    }
+
+    /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
+    pub async fn get_bucket_location(&self, other_bucket: Option<&str>) -> Result<String, Error> {
+        let now_gmt = now_gmt();
+        let bucket_name = if let Some(b) = other_bucket {
+            b
+        } else {
+            &self.bucket
+        };
+        let url = Url::parse_with_params(
+            &format!("https://{}.{}", bucket_name, self.endpoint),
+            [("location", "")],
+        )
+        .unwrap();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "GET",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(bucket_name),
+            // 你可以认为，这个请求其实是请求bucket的一个特殊object
+            Some("?location"),
+        );
+
+        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        common_header.insert(
+            "Host".to_owned(),
+            format!("{}.{}", bucket_name, self.endpoint),
+        );
+
+        let header_map: HeaderMap = common_header
+            .iter()
+            .map(|(k, v)| {
+                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+                (name, value)
+            })
+            .collect();
+
+        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        let text = resp.text().await?;
+        let res: LocationConstraint =
+            quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+                source: e,
+                origin_text: text,
+            })?;
+        Ok(res.field)
     }
 }
