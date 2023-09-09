@@ -127,3 +127,18 @@ async fn get_bucket_location_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn get_bucket_stat_test() {
+    let client = get_oss_client();
+
+    let res = client.get_bucket_stat(Some("example-oss-todel")).await;
+
+    match res {
+        Ok(s) => println!("res:\n {:?}", s),
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("{}", e),
+        },
+    }
+}

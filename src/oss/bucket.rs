@@ -156,6 +156,29 @@ struct LocationConstraint {
     pub field: String,
 }
 
+// region:    --- get bucket stat
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct BucketStat {
+    pub storage: u64,
+    pub object_count: u32,
+    pub multipart_upload_count: u32,
+    pub live_channel_count: u32,
+    pub last_modified_time: u64,
+    pub standard_storage: u64,
+    pub standard_object_count: u32,
+    pub infrequent_access_storage: u64,
+    pub infrequent_access_real_storage: u64,
+    pub infrequent_access_object_count: u32,
+    pub archive_storage: u64,
+    pub archive_real_storage: u64,
+    pub archive_object_count: u32,
+    pub cold_archive_storage: u64,
+    pub cold_archive_real_storage: u64,
+    pub cold_archive_object_count: u32,
+}
+// endregion: --- get bucket stat
+
 impl OSSClient {
     pub async fn put_bucket(
         &self,
@@ -384,5 +407,60 @@ impl OSSClient {
                 origin_text: text,
             })?;
         Ok(res.field)
+    }
+
+    /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
+    pub async fn get_bucket_stat(&self, other_bucket: Option<&str>) -> Result<BucketStat, Error> {
+        let now_gmt = now_gmt();
+        let bucket_name = if let Some(b) = other_bucket {
+            b
+        } else {
+            &self.bucket
+        };
+        let url = Url::parse_with_params(
+            &format!("https://{}.{}", bucket_name, self.endpoint),
+            [("stat", "")],
+        )
+        .unwrap();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "GET",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(bucket_name),
+            // 你可以认为，这个请求其实是请求bucket的一个特殊object
+            Some("?stat"),
+        );
+
+        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        common_header.insert(
+            "Host".to_owned(),
+            format!("{}.{}", bucket_name, self.endpoint),
+        );
+
+        let header_map: HeaderMap = common_header
+            .iter()
+            .map(|(k, v)| {
+                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+                (name, value)
+            })
+            .collect();
+
+        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        let text = resp.text().await?;
+        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+            source: e,
+            origin_text: text,
+        })?;
+
+        Ok(res)
     }
 }
