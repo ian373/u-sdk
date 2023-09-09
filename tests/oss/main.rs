@@ -110,3 +110,24 @@ async fn list_objects_v2_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn get_bucket_info_test() {
+    let conf = test_config::AliConfig::get_conf();
+    let client = oss::OSSClient::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.endpoint,
+        conf.bucket_name,
+    );
+
+    let res = client.get_bucket_info(None).await;
+
+    match res {
+        Ok(s) => println!("res:\n {:?}", s),
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("error: {}", e),
+        },
+    }
+}

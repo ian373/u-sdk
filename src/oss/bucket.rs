@@ -100,6 +100,54 @@ pub struct Owner {
 }
 // endregion: --- list objects v2
 
+// region:    --- get bucket info
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct BucketInfo {
+    pub bucket: Bucket,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Bucket {
+    pub creation_date: String,
+    pub extranet_endpoint: String,
+    pub intranet_endpoint: String,
+    pub location: String,
+    pub storage_class: String,
+    pub name: String,
+    pub resource_group_id: String,
+    pub owner: Owner,
+    pub access_control_list: AccessControlList,
+    pub data_redundancy_type: String,
+    pub cross_region_replication: String,
+    pub transfer_acceleration: String,
+    pub access_monitor: String,
+    pub bucket_policy: BucketPolicy,
+    pub comment: String,
+    pub server_side_encryption_rule: ServerSideEncryptionRule,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ServerSideEncryptionRule {
+    #[serde(rename = "SSEAlgorithm")]
+    pub ssealgorithm: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct AccessControlList {
+    pub grant: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct BucketPolicy {
+    pub log_bucket: String,
+    pub log_prefix: String,
+}
+// endregion: --- get bucket info
+
 impl OSSClient {
     pub async fn put_bucket(
         &self,
@@ -211,6 +259,59 @@ impl OSSClient {
 
         let text = resp.text().await?;
         // println!("text: {}", text);
+        let res = quick_xml::de::from_str(&text)?;
+
+        Ok(res)
+    }
+
+    /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
+    pub async fn get_bucket_info(&self, other_bucket: Option<&str>) -> Result<BucketInfo, Error> {
+        let now_gmt = now_gmt();
+        let bucket_name = if let Some(b) = other_bucket {
+            b
+        } else {
+            &self.bucket
+        };
+        let url = Url::parse_with_params(
+            &format!("https://{}.{}", bucket_name, self.endpoint),
+            [("bucketInfo", "")],
+        )
+        .unwrap();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "GET",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(bucket_name),
+            // 你可以认为，这个请求其实是请求bucket的一个特殊object
+            Some("?bucketInfo"),
+        );
+
+        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        common_header.insert(
+            "Host".to_owned(),
+            format!("{}.{}", bucket_name, self.endpoint),
+        );
+
+        let header_map: HeaderMap = common_header
+            .iter()
+            .map(|(k, v)| {
+                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+                (name, value)
+            })
+            .collect();
+
+        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        let text = resp.text().await?;
+        // println!("resp_text:\n{}", text);
         let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
