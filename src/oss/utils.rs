@@ -13,7 +13,8 @@ pub fn now_gmt() -> String {
         .replace("+0000", "GMT")
 }
 
-fn get_content_md5(bytes: Option<&[u8]>) -> String {
+// TODO 注意，这个方法理论上是私有的，文件外部只有一个地方使用，到时候当外部不使用的时候记得改为私有
+pub fn get_content_md5(bytes: Option<&[u8]>) -> String {
     if bytes.is_none() {
         return "".to_owned();
     }
