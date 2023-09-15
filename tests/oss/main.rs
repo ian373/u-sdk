@@ -170,7 +170,13 @@ async fn put_object_test() {
     x_o_header.insert("test-1", "test-v-1");
 
     let res = client
-        .put_object(c_header, x_header, x_o_header, r"C:\example\13468799.TXT")
+        .put_object(
+            c_header,
+            x_header,
+            x_o_header,
+            r"C:\ex\a\123.txt",
+            "/test_file/",
+        )
         .await;
 
     match res {

@@ -2,11 +2,12 @@ use crate::error::Error;
 
 pub fn get_local_file(file_path: &str) -> Result<(String, Vec<u8>), Error> {
     let p = std::path::Path::new(file_path);
-    let file_path = p.to_str().ok_or(Error::CommonError(
-        "Please input a valid file path!".to_owned(),
-    ))?;
+    // 调用is_file，将检查本地磁盘是否存在该文件
     if !p.is_file() {
-        return Err(Error::CommonError("Please input a file path!".to_owned()));
+        return Err(Error::CommonError(format!(
+            "The file doesn't exist or not have permission to access, path: {}",
+            file_path
+        )));
     }
 
     let bytes = std::fs::read(file_path).map_err(|_| {
@@ -20,13 +21,44 @@ pub fn get_local_file(file_path: &str) -> Result<(String, Vec<u8>), Error> {
         ));
     }
 
-    Ok((
-        p.file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned()
-            .to_lowercase(),
-        bytes,
-    ))
+    let mut file_name = String::from(p.file_stem().unwrap().to_str().unwrap());
+    if let Some(ex) = p.extension() {
+        file_name.push('.');
+        file_name.push_str(ex.to_str().unwrap())
+    }
+
+    Ok((file_name, bytes))
+}
+
+#[test]
+fn get_local_file_test() {
+    let res = get_local_file(r"C:\es\test_no_ex");
+    match res {
+        Ok((s, _)) => println!("name: {}", s),
+        Err(e) => println!("{}", e),
+    }
+}
+
+pub fn get_dest_path(path: &str, local_file_name: &str) -> Result<String, Error> {
+    let mut dest_path = std::path::PathBuf::from(path);
+    if !dest_path.has_root() {
+        return Err(Error::CommonError(
+            "Please input a absoulute path".to_owned(),
+        ));
+    }
+
+    if path.ends_with('/') {
+        dest_path.push(local_file_name);
+    }
+
+    Ok(dest_path.to_str().unwrap().to_owned())
+}
+
+#[test]
+fn get_dest_path_test() {
+    let res = get_dest_path(r"/", "123.txt");
+    match res {
+        Ok(s) => println!("res:{}", s),
+        Err(e) => println!("error:{}", e),
+    }
 }

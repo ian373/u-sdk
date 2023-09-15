@@ -2,6 +2,7 @@
 
 use super::utils::get_local_file;
 use crate::error::Error;
+use crate::oss::object::utils::get_dest_path;
 use crate::oss::utils::{now_gmt, sign_authorization};
 use crate::oss::OSSClient;
 
@@ -55,17 +56,19 @@ pub struct XHeader<'a> {
 pub type XOtherHeader<'a> = HashMap<&'a str, &'a str>;
 
 impl OSSClient {
-    /// `oss_file_path`：必须使用绝对路径，如果以`/`结尾，则使用上传文件的文件名称，如果以`xxx.xx`结尾，则文件名使用`xxx.xx`
+    /// - `dest_path`：使用linux文件风格(`/xx/xx`)，且必须使用绝对路径，即以`/`开头,
+    /// 如果以`/`结尾，则使用上传文件的文件名称，如果以`/xxx.xx`结尾，则文件名使用`xxx.xx`<br/>
+    /// - 注意，本代码无法解析包含`/.`和`/..`的路径，如果出现上述情况，会导致`object_name`无法正确得出，从而导致签名计算错误。后期可能会解决此类问题
     pub async fn put_object(
         &self,
         c_header: CHeader<'_>,
         x_header: XHeader<'_>,
         x_other_header: XOtherHeader<'_>,
         local_file_path: &str,
-        // TODO 依据给出的路径上传到oss
-        // oss_file_path: &str,
+        dest_path: &str,
     ) -> Result<(), Error> {
         let (local_file_name, bytes) = get_local_file(local_file_path)?;
+        // TODO 根据文件名称自动生成content_type
         let content_type = "plain/text";
 
         let mut header_map = HashMap::new();
@@ -73,7 +76,7 @@ impl OSSClient {
             serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
         header_map.extend(c_header_map);
 
-        // TODO 注意，这里的md5计算和下面的签名重复计算了两次，需要优化！
+        // FIXME 注意，这里的md5计算和下面的签名重复计算了两次，需要优化！
         header_map.insert("Content-MD5".to_owned(), get_content_md5(Some(&bytes)));
         header_map.insert("Content-Length".to_owned(), bytes.len().to_string());
 
@@ -91,6 +94,7 @@ impl OSSClient {
         oss_header_map.append(&mut x_other_header_map);
 
         let now_gmt = now_gmt();
+        let dest_path = get_dest_path(dest_path, &local_file_name)?;
         let authorization = sign_authorization(
             &self.access_key_id,
             &self.access_key_secret,
@@ -100,7 +104,8 @@ impl OSSClient {
             &now_gmt,
             Some(&oss_header_map),
             Some(&self.bucket),
-            Some(&local_file_name),
+            // object_name不包含dest_path的第一个字符'/'
+            Some(&dest_path[1..]),
         );
 
         header_map.extend(oss_header_map);
@@ -124,10 +129,10 @@ impl OSSClient {
 
         let builder = self
             .http_client
-            .put(format!("{}/{}", self.bucket_url(), local_file_name))
+            .put(format!("{}{}", self.bucket_url(), dest_path))
             .headers(header_map)
             .body(bytes);
-        println!("builder: {:#?}", builder);
+        // println!("builder: {:#?}", builder);
         let resp = builder.send().await?;
         if resp.status() != StatusCode::OK {
             return Err(Error::StatusCodeNot200Resp(resp));
