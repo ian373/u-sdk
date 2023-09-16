@@ -13,16 +13,11 @@ pub fn now_gmt() -> String {
         .replace("+0000", "GMT")
 }
 
-// TODO 注意，这个方法理论上是私有的，文件外部只有一个地方使用，到时候当外部不使用的时候记得改为私有
-pub fn get_content_md5(bytes: Option<&[u8]>) -> String {
-    if bytes.is_none() {
-        return "".to_owned();
-    }
-
+pub fn get_content_md5(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};
 
     let mut hasher = Md5::new();
-    hasher.update(bytes.unwrap());
+    hasher.update(bytes);
     let res = hasher.finalize();
 
     general_purpose::STANDARD.encode(res)
@@ -65,18 +60,14 @@ pub fn sign_authorization(
     access_key_id: &str,
     access_key_secret: &str,
     verb: &str,
-    bytes: Option<&[u8]>,
+    content_md5: Option<&str>,
     content_type: Option<&str>,
     date: &str,
     oss_header_map: Option<&BTreeMap<String, String>>,
     bucket_name: Option<&str>,
     object_name: Option<&str>,
 ) -> String {
-    let content_md5 = if bytes.is_some() {
-        get_content_md5(bytes)
-    } else {
-        "".to_owned()
-    };
+    let content_md5 = if let Some(s) = content_md5 { s } else { "" };
 
     let canonicalized_oss_headers = if oss_header_map.is_some() {
         get_canonicalized_oss_header(oss_header_map)
@@ -104,6 +95,6 @@ pub fn sign_authorization(
 
 #[test]
 fn get_content_md5_test() {
-    let s = get_content_md5(Some(b"0123456789"));
+    let s = get_content_md5(b"0123456789");
     assert_eq!(&s, "eB5eJF1ptWaXm4bijSPyxw==")
 }

@@ -84,8 +84,6 @@ impl OSSClient {
             serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
         header_map.extend(c_header_map);
 
-        // FIXME 注意，这里的md5计算和下面的签名重复计算了两次，需要优化！
-        header_map.insert("Content-MD5".to_owned(), get_content_md5(Some(&bytes)));
         header_map.insert("Content-Length".to_owned(), bytes.len().to_string());
 
         let mut x_header_map: BTreeMap<String, String> =
@@ -103,11 +101,12 @@ impl OSSClient {
 
         let now_gmt = now_gmt();
         let dest_path = get_dest_path(dest_path, &local_file_name)?;
+        let content_md5 = get_content_md5(&bytes);
         let authorization = sign_authorization(
             &self.access_key_id,
             &self.access_key_secret,
             "PUT",
-            Some(&bytes),
+            Some(&content_md5),
             Some(&content_type),
             &now_gmt,
             Some(&oss_header_map),
@@ -115,6 +114,7 @@ impl OSSClient {
             // object_name不包含dest_path的第一个字符'/'
             Some(&dest_path[1..]),
         );
+        header_map.insert("Content-MD5".to_owned(), content_md5);
 
         header_map.extend(oss_header_map);
 
