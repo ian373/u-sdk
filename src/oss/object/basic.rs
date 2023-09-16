@@ -56,6 +56,7 @@ pub struct XHeader<'a> {
 pub type XOtherHeader<'a> = HashMap<&'a str, &'a str>;
 
 impl OSSClient {
+    /// - `content_type`，如果为None，则根据文件后缀名自动推测对应类型，但是不能保证推测100%正确
     /// - `dest_path`：使用linux文件风格(`/xx/xx`)，且必须使用绝对路径，即以`/`开头,
     /// 如果以`/`结尾，则使用上传文件的文件名称，如果以`/xxx.xx`结尾，则文件名使用`xxx.xx`<br/>
     /// - 注意，本代码无法解析包含`/.`和`/..`的路径，如果出现上述情况，会导致`object_name`无法正确得出，从而导致签名计算错误。后期可能会解决此类问题
@@ -66,10 +67,17 @@ impl OSSClient {
         x_other_header: XOtherHeader<'_>,
         local_file_path: &str,
         dest_path: &str,
+        content_type: Option<&str>,
     ) -> Result<(), Error> {
         let (local_file_name, bytes) = get_local_file(local_file_path)?;
-        // TODO 根据文件名称自动生成content_type
-        let content_type = "plain/text";
+
+        let content_type = if let Some(s) = content_type {
+            s.to_owned()
+        } else {
+            mime_guess::MimeGuess::from_path(&local_file_name)
+                .first_or_octet_stream()
+                .to_string()
+        };
 
         let mut header_map = HashMap::new();
         let c_header_map: HashMap<String, String> =
@@ -100,7 +108,7 @@ impl OSSClient {
             &self.access_key_secret,
             "PUT",
             Some(&bytes),
-            Some(content_type),
+            Some(&content_type),
             &now_gmt,
             Some(&oss_header_map),
             Some(&self.bucket),
@@ -113,7 +121,7 @@ impl OSSClient {
         let common_header = self.get_common_header_map(
             &authorization,
             Some(&bytes.len().to_string()),
-            Some(content_type),
+            Some(&content_type),
             &now_gmt,
         );
         header_map.extend(common_header);

@@ -176,6 +176,7 @@ async fn put_object_test() {
             x_o_header,
             r"C:\ex\a\123.txt",
             "/test_file/",
+            None,
         )
         .await;
 
