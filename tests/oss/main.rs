@@ -188,3 +188,33 @@ async fn put_object_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn get_object_test() {
+    use oss::object::basic::*;
+
+    let client = get_oss_client();
+
+    let c_header = GetObjectHeader {
+        range: Some("bytes=0-4"),
+        ..Default::default()
+    };
+
+    let res = client
+        .get_object(c_header, "/test/test_fi.txt", r"C:\Users\666.txt")
+        .await;
+
+    match res {
+        Ok(r) => {
+            if let Some(map) = r {
+                println!("ok, and headers is: {:#?}", map);
+            } else {
+                println!("ok!");
+            }
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("{}", e),
+        },
+    }
+}

@@ -12,6 +12,7 @@ use reqwest::StatusCode;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
+// region:    --- pub object
 /// 一般性Header</br>
 /// 以下两个header由程序读取文件的时候获取相应信息并自动添加：<br/>
 /// - `content_md5`
@@ -54,6 +55,26 @@ pub struct XHeader<'a> {
 /// x-oss-meta-* Header<br/>
 /// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
 pub type XOtherHeader<'a> = HashMap<&'a str, &'a str>;
+// endregion: --- pub object
+
+// region:    --- get object
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct GetObjectHeader<'a> {
+    pub response_content_type: Option<&'a str>,
+    pub response_content_language: Option<&'a str>,
+    pub response_expires: Option<&'a str>,
+    pub response_cache_control: Option<&'a str>,
+    pub response_content_disposition: Option<&'a str>,
+    pub response_content_encoding: Option<&'a str>,
+    pub range: Option<&'a str>,
+    pub if_modified_since: Option<&'a str>,
+    pub if_unmodified_since: Option<&'a str>,
+    pub if_match: Option<&'a str>,
+    pub if_none_match: Option<&'a str>,
+    pub accept_encoding: Option<&'a str>,
+}
 
 impl OSSClient {
     /// 本API将会一次性读取文件到内存然后进行上传，请注意上传文件的大小以免爆内存<br/>
@@ -148,5 +169,75 @@ impl OSSClient {
         }
 
         Ok(())
+    }
+
+    /// 获取单个文件或其部分数据，一次性读取数据到内存，然后再保存到本地磁盘中<br/>
+    /// - `oss_path`：oss上object的绝对路径，linux路径风格，不能包含`/.`或`/..`
+    /// - `dest_path`: 保存在本地磁盘的路径，需要一个文件的绝对路径
+    /// - RETURN：当`c_header`的值全为`None`是，说明是一个普通文件下载，成功请求后函数不返回任何内容；
+    /// 当`c_header`的值不全为`None`，说明对返回结果有一些配置，需要用到Response Header，这里把响应头转化为`HashMap`，用户可从中取得相应的内容
+    pub async fn get_object(
+        &self,
+        c_header: GetObjectHeader<'_>,
+        oss_path: &str,
+        dest_path: &str,
+    ) -> Result<Option<HashMap<String, String>>, Error> {
+        // TODO 加强对路径合法性的校验，防止因为路径不合法导致的错误
+
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "GET",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(&self.bucket),
+            Some(&oss_path[1..]),
+        );
+
+        let c_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
+        let c_header_is_empty = c_header_map.is_empty();
+
+        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        let mut header_map = HashMap::new();
+        header_map.extend(common_header);
+        header_map.extend(c_header_map);
+
+        let header_map: HeaderMap = header_map
+            .iter()
+            .map(|(k, v)| {
+                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+                (name, value)
+            })
+            .collect();
+
+        let builder = self
+            .http_client
+            .get(format!("{}{}", self.bucket_url(), oss_path))
+            .headers(header_map);
+        let resp = builder.send().await?;
+        // println!("resp:{:#?}", resp);
+        if resp.status() != StatusCode::OK && resp.status() != StatusCode::PARTIAL_CONTENT {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        if c_header_is_empty {
+            std::fs::write(dest_path, resp.bytes().await?)
+                .map_err(|e| Error::CommonError(format!("write data to disk error, {}", e)))?;
+            Ok(None)
+        } else {
+            let map: HashMap<String, String> = resp
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
+                .collect();
+            std::fs::write(dest_path, resp.bytes().await?)
+                .map_err(|e| Error::CommonError(format!("write data to disk error, {}", e)))?;
+            Ok(Some(map))
+        }
     }
 }
