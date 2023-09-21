@@ -19,40 +19,33 @@ pub struct PutBucketHeader<'a> {
     pub x_oss_resource_group_id: Option<&'a str>,
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 
 pub struct CreateBucketConfiguration<'a> {
     /// 默认为`Standard`
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_class: Option<&'a str>,
     /// 默认为`LRS`
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub data_redundancy_type: Option<&'a str>,
 }
 // endregion: --- put bucket
 
 // region:    --- list objects v2
 /// `list-type`将自动设为2
+#[serde_with::skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ListObjectsV2Query<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub delimiter: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub start_after: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub continuation_token: Option<&'a str>,
     // 最好改为u16类型
     /// `u16`类型
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_keys: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub prefix: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_type: Option<&'a str>,
     /// `bool`类型
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub fetch_owner: Option<&'a str>,
 }
 

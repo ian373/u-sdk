@@ -17,38 +17,28 @@ use std::collections::{BTreeMap, HashMap};
 /// 以下两个header由程序读取文件的时候获取相应信息并自动添加：<br/>
 /// - `content_md5`
 /// - `content_length`
+#[serde_with::skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct CHeader<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub content_disposition: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub content_encoding: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub e_tag: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<&'a str>,
 }
 
 /// x-oss-xxx Header
+#[serde_with::skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct XHeader<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_forbid_overwrite: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_server_side_encryption: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_server_side_data_encryption: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_server_side_encryption_key_id: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_object_acl: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_storage_class: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub x_oss_tagging: Option<&'a str>,
 }
 

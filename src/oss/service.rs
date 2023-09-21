@@ -11,14 +11,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use url::Url;
 
+#[serde_with::skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ListBucketsQueryParams<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub prefix: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub marker: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     // TODO 这里可以改为Option<u16>，,1~1000，因为max_keys输入的时候是必是数字，
     // 这样写更不容易出错，但这要就需要解决类型问题，因为这个结构体需要序列化，类型必须同一，想办法解决
     pub max_keys: Option<&'a str>,
