@@ -56,6 +56,7 @@ pub struct XHeader<'a> {
 pub type XOtherHeader<'a> = HashMap<&'a str, &'a str>;
 
 impl OSSClient {
+    /// 本API将会一次性读取文件到内存然后进行上传，请注意上传文件的大小以免爆内存<br/>
     /// - `content_type`，如果为None，则根据文件后缀名自动推测对应类型，但是不能保证推测100%正确
     /// - `dest_path`：使用linux文件风格(`/xx/xx`)，且必须使用绝对路径，即以`/`开头,
     /// 如果以`/`结尾，则使用上传文件的文件名称，如果以`/xxx.xx`结尾，则文件名使用`xxx.xx`<br/>
@@ -147,10 +148,5 @@ impl OSSClient {
         }
 
         Ok(())
-    }
-
-    /// 创建一个文件夹，但其本质上上传一个以`/`结尾，0 bytes的object，用于模拟文件夹
-    pub async fn create_virtual_dir() {
-        todo!()
     }
 }
