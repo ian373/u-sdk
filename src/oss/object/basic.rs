@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, HashMap};
 /// - `content_md5`
 /// - `content_length`
 #[serde_with::skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct CHeader<'a> {
     pub cache_control: Option<&'a str>,
@@ -29,7 +29,7 @@ pub struct CHeader<'a> {
 
 /// x-oss-xxx Header
 #[serde_with::skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct XHeader<'a> {
     pub x_oss_forbid_overwrite: Option<&'a str>,

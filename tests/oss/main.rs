@@ -17,11 +17,7 @@ fn get_oss_client() -> oss::OSSClient {
 async fn list_buckets_test() {
     let client = get_oss_client();
 
-    let query = oss::service::ListBucketsQueryParams {
-        prefix: None,
-        marker: None,
-        max_keys: None,
-    };
+    let query = oss::service::ListBucketsQueryParams::default();
     let res = client.list_buckets(None, query).await;
     match res {
         Ok(s) => println!("res:\n{:?}", s),
@@ -47,14 +43,8 @@ async fn put_bucket_test() {
 
     let client = get_oss_client();
 
-    let x_oss_header = PutBucketHeader {
-        x_oss_acl: None,
-        x_oss_resource_group_id: None,
-    };
-    let params = CreateBucketConfiguration {
-        storage_class: None,
-        data_redundancy_type: None,
-    };
+    let x_oss_header = PutBucketHeader::default();
+    let params = CreateBucketConfiguration::default();
 
     let res = client
         .put_bucket(
@@ -150,21 +140,10 @@ async fn put_object_test() {
 
     let client = get_oss_client();
 
-    let c_header = CHeader {
-        cache_control: None,
-        content_disposition: None,
-        content_encoding: None,
-        e_tag: None,
-        expires: None,
-    };
+    let c_header = CHeader::default();
     let x_header = XHeader {
         x_oss_forbid_overwrite: Some("true"),
-        x_oss_server_side_data_encryption: None,
-        x_oss_server_side_encryption_key_id: None,
-        x_oss_server_side_encryption: None,
-        x_oss_object_acl: None,
-        x_oss_storage_class: None,
-        x_oss_tagging: None,
+        ..Default::default()
     };
     let mut x_o_header = HashMap::new();
     x_o_header.insert("test-1", "test-v-1");

@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 use url::Url;
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ListBucketsQueryParams<'a> {
     pub prefix: Option<&'a str>,

@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use url::Url;
 
 // region:    --- put bucket
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct PutBucketHeader<'a> {
     /// 为`None`时该请求头值默认为`private`
@@ -19,7 +19,7 @@ pub struct PutBucketHeader<'a> {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "PascalCase")]
 
 pub struct CreateBucketConfiguration<'a> {
@@ -33,7 +33,7 @@ pub struct CreateBucketConfiguration<'a> {
 // region:    --- list objects v2
 /// `list-type`将自动设为2
 #[serde_with::skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ListObjectsV2Query<'a> {
     pub delimiter: Option<&'a str>,
