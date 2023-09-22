@@ -1,12 +1,9 @@
 use super::utils::now_gmt;
 use super::OSSClient;
 use crate::error::Error;
-use crate::oss::utils::sign_authorization;
+use crate::oss::utils::{into_header_map, sign_authorization};
 
-use reqwest::{
-    header::{HeaderMap, HeaderName, HeaderValue},
-    StatusCode,
-};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use url::Url;
@@ -106,14 +103,7 @@ impl OSSClient {
         header_map.extend(common_header);
 
         // 把HashMap转化为reqwest需要的HeaderMap
-        let header_map: HeaderMap = header_map
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(header_map);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
         if resp.status() != StatusCode::OK {

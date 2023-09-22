@@ -3,11 +3,10 @@
 use super::utils::get_local_file;
 use crate::error::Error;
 use crate::oss::object::utils::get_dest_path;
-use crate::oss::utils::{now_gmt, sign_authorization};
+use crate::oss::utils::{into_header_map, now_gmt, sign_authorization};
 use crate::oss::OSSClient;
 
 use crate::oss::utils::get_content_md5;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -138,14 +137,7 @@ impl OSSClient {
         );
         header_map.extend(common_header);
 
-        let header_map: HeaderMap = header_map
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(header_map);
 
         let builder = self
             .http_client
@@ -196,14 +188,7 @@ impl OSSClient {
         header_map.extend(common_header);
         header_map.extend(c_header_map);
 
-        let header_map: HeaderMap = header_map
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(header_map);
 
         let builder = self
             .http_client

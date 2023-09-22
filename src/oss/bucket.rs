@@ -1,10 +1,9 @@
 //! 只实现了小部分API
 
-use super::utils::{now_gmt, sign_authorization};
+use super::utils::{into_header_map, now_gmt, sign_authorization};
 use super::OSSClient;
 use crate::error::Error;
 
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -209,14 +208,7 @@ impl OSSClient {
 
         header_map.extend(common_header);
 
-        let header_map: HeaderMap = header_map
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(header_map);
 
         // let rq_xml = if params.storage_class.is_none() && params.data_redundancy_type.is_none() {
         //     "".to_owned()
@@ -267,14 +259,7 @@ impl OSSClient {
 
         let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
 
-        let header_map: HeaderMap = common_header
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
         if resp.status() != StatusCode::OK {
@@ -323,14 +308,7 @@ impl OSSClient {
             format!("{}.{}", bucket_name, self.endpoint),
         );
 
-        let header_map: HeaderMap = common_header
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
         if resp.status() != StatusCode::OK {
@@ -379,14 +357,7 @@ impl OSSClient {
             format!("{}.{}", bucket_name, self.endpoint),
         );
 
-        let header_map: HeaderMap = common_header
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
         if resp.status() != StatusCode::OK {
@@ -434,14 +405,7 @@ impl OSSClient {
             format!("{}.{}", bucket_name, self.endpoint),
         );
 
-        let header_map: HeaderMap = common_header
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
         if resp.status() != StatusCode::OK {

@@ -1,12 +1,9 @@
 use super::utils::now_gmt;
 use super::OSSClient;
 use crate::error::Error;
-use crate::oss::utils::sign_authorization;
+use crate::oss::utils::{into_header_map, sign_authorization};
 
-use reqwest::{
-    header::{HeaderMap, HeaderName, HeaderValue},
-    StatusCode,
-};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use url::Url;
 
@@ -51,14 +48,7 @@ impl OSSClient {
         let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
         common_header.insert("Host".to_owned(), self.endpoint.clone());
 
-        let header_map: HeaderMap = common_header
-            .iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-                let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-                (name, value)
-            })
-            .collect();
+        let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
         if resp.status() != StatusCode::OK {
