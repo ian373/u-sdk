@@ -8,7 +8,7 @@ use crate::oss::OSSClient;
 
 use crate::oss::utils::get_content_md5;
 use reqwest::StatusCode;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 // region:    --- pub object
@@ -64,6 +64,34 @@ pub struct GetObjectHeader<'a> {
     pub if_none_match: Option<&'a str>,
     pub accept_encoding: Option<&'a str>,
 }
+// endregion: --- get object
+
+// region:    --- copy object
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct CopyObjectXHeader<'a> {
+    pub x_oss_forbid_overwrite: Option<&'a str>,
+    pub x_oss_copy_source_if_match: Option<&'a str>,
+    pub x_oss_copy_source_if_none_match: Option<&'a str>,
+    pub x_oss_copy_source_if_unmodified_since: Option<&'a str>,
+    pub x_oss_copy_source_if_modified_since: Option<&'a str>,
+    pub x_oss_metadata_directive: Option<&'a str>,
+    pub x_oss_server_side_encryption: Option<&'a str>,
+    pub x_oss_server_side_encryption_key_id: Option<&'a str>,
+    pub x_oss_object_acl: Option<&'a str>,
+    pub x_oss_storage_class: Option<&'a str>,
+    pub x_oss_tagging: Option<&'a str>,
+    pub x_oss_tagging_directive: Option<&'a str>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct CopyObjectResult {
+    pub e_tag: String,
+    pub last_modified: String,
+}
+// endregion: --- copy object
 
 impl OSSClient {
     /// 本API将会一次性读取文件到内存然后进行上传，请注意上传文件的大小以免爆内存<br/>
@@ -214,5 +242,69 @@ impl OSSClient {
                 .map_err(|e| Error::CommonError(format!("write data to disk error, {}", e)))?;
             Ok(Some(map))
         }
+    }
+
+    /// - `x_oss_copy_source`为请求头必带参数，这里抽离出来作为函数参数输入，eg: `/source_bucket_name/source_object_name`
+    /// - `dest_bucket`如果为`None`，则为`OSSClinet`配置的`bucket`，eg：`oss-example`
+    /// - `dest_end_point`，同上，eg：`oss-cn-hangzhou.aliyuncs.com`
+    /// - `dest_oss_path`：你复制object到`dest_bucket`的路径，eg：`/dir1/abc.txt`
+    pub async fn copy_object(
+        &self,
+        x_oss_copy_source: &str,
+        dest_bucket: Option<&str>,
+        dest_end_point: Option<&str>,
+        dest_oss_path: &str,
+        copy_object_x_header: CopyObjectXHeader<'_>,
+    ) -> Result<CopyObjectResult, Error> {
+        let mut x_header_map: BTreeMap<String, String> =
+            serde_json::from_value(serde_json::to_value(copy_object_x_header).unwrap()).unwrap();
+        x_header_map.insert("x-oss-copy-source".to_owned(), x_oss_copy_source.to_owned());
+
+        let bucket = if let Some(s) = dest_bucket {
+            s.to_owned()
+        } else {
+            self.bucket.to_owned()
+        };
+        let end_point = if let Some(p) = dest_end_point {
+            p.to_owned()
+        } else {
+            self.endpoint.to_owned()
+        };
+        let host = format!("{}.{}", bucket, end_point);
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "PUT",
+            None,
+            None,
+            &now_gmt,
+            Some(&x_header_map),
+            Some(&bucket),
+            Some(&dest_oss_path[1..]),
+        );
+        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        common_header.insert("Host".to_owned(), host);
+        common_header.extend(x_header_map);
+
+        let header_map = into_header_map(common_header);
+
+        let builder = self
+            .http_client
+            .put(format!("https://{}.{}{}", bucket, end_point, dest_oss_path))
+            .headers(header_map);
+        // println!("builder: {:#?}", builder);
+        let resp = builder.send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        let text = resp.text().await?;
+        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+            source: e,
+            origin_text: text,
+        })?;
+
+        Ok(res)
     }
 }

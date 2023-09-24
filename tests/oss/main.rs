@@ -197,3 +197,35 @@ async fn get_object_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn copy_object_test() {
+    use oss::object::basic::*;
+
+    let client = get_oss_client();
+
+    let x_header = CopyObjectXHeader {
+        x_oss_forbid_overwrite: Some("true"),
+        ..Default::default()
+    };
+
+    let res = client
+        .copy_object(
+            "/uua-private-01/13468799.TXT",
+            Some("example-oss-todel"),
+            None,
+            "/1122/123.txt",
+            x_header,
+        )
+        .await;
+
+    match res {
+        Ok(r) => {
+            println!("res:{:#?}", r);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("{}", e),
+        },
+    }
+}
