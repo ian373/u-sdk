@@ -1,3 +1,4 @@
 阿里云服务 sdk，目前有以下模块：
 
--   邮件服务(email)
+-   邮件服务(email)，async
+-   对象存储(oss)，async
