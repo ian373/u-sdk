@@ -22,9 +22,10 @@ pub fn get_local_file(file_path: &str) -> Result<(String, Vec<u8>), Error> {
     }
 
     let mut file_name = String::from(p.file_stem().unwrap().to_str().unwrap());
+    // 文件名后缀，同一转化为小写
     if let Some(ex) = p.extension() {
         file_name.push('.');
-        file_name.push_str(ex.to_str().unwrap())
+        file_name.push_str(ex.to_str().unwrap().to_lowercase().as_str())
     }
 
     Ok((file_name, bytes))
