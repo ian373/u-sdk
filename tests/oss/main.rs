@@ -145,14 +145,14 @@ async fn put_object_test() {
         x_oss_forbid_overwrite: Some("true"),
         ..Default::default()
     };
-    let mut x_o_header = HashMap::new();
-    x_o_header.insert("test-1", "test-v-1");
+    let mut x_meta_map = HashMap::new();
+    x_meta_map.insert("test-1", "test-v-1");
 
     let res = client
         .put_object(
             c_header,
             x_header,
-            x_o_header,
+            x_meta_map.into(),
             r"C:\ex\a\123.txt",
             "/test_file/",
             None,

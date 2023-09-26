@@ -11,7 +11,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
-// TODO 把这里所有的struct都提取到一个文件夹，然后使用use::xxx::*;来引入
+// TODO 把这里所有的struct都提取到一个文件夹，然后使用use::xxx::*;来引入，其它文件也类似使用此方法
 
 // region:    --- pub object
 /// 一般性Header</br>
@@ -45,8 +45,25 @@ pub struct XHeader<'a> {
 
 /// x-oss-meta-* Header<br/>
 /// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
-// TODO 这里有多处用到此类型，需要把这个类型从type转化为struct，然后imple：add_key_prefix() -> 添加前缀后的HashMap<String,String>
-pub type XOtherHeader<'a> = HashMap<&'a str, &'a str>;
+pub struct XMetaHeader(BTreeMap<String, String>);
+
+// impl XMetaHeader<'_> {
+//     pub(crate) fn into_meta_map(self) -> BTreeMap<String, String> {
+//         self.0
+//             .into_iter()
+//             .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_owned()))
+//             .collect()
+//     }
+// }
+impl From<HashMap<&str, &str>> for XMetaHeader {
+    fn from(value: HashMap<&str, &str>) -> Self {
+        let map = value
+            .into_iter()
+            .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_owned()))
+            .collect();
+        Self(map)
+    }
+}
 
 // endregion: --- pub object
 
@@ -136,7 +153,7 @@ impl OSSClient {
         &self,
         c_header: CHeader<'_>,
         x_header: XHeader<'_>,
-        x_other_header: XOtherHeader<'_>,
+        mut x_meta_header: XMetaHeader,
         local_file_path: &str,
         dest_path: &str,
         content_type: Option<&str>,
@@ -160,16 +177,10 @@ impl OSSClient {
 
         let mut x_header_map: BTreeMap<String, String> =
             serde_json::from_value(serde_json::to_value(x_header).unwrap()).unwrap();
-        let x_other_header_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(x_other_header).unwrap()).unwrap();
-        let mut x_other_header_map = x_other_header_map
-            .into_iter()
-            .map(|(k, v)| (format!("x-oss-meta-{k}"), v))
-            .collect();
 
         let mut oss_header_map = BTreeMap::new();
         oss_header_map.append(&mut x_header_map);
-        oss_header_map.append(&mut x_other_header_map);
+        oss_header_map.append(&mut x_meta_header.0);
 
         let now_gmt = now_gmt();
         let dest_path = get_dest_path(dest_path, &local_file_name)?;
