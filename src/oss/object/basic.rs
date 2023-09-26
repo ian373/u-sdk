@@ -11,6 +11,8 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
+// TODO 把这里所有的struct都提取到一个文件夹，然后使用use::xxx::*;来引入
+
 // region:    --- pub object
 /// 一般性Header</br>
 /// 以下两个header由程序读取文件的时候获取相应信息并自动添加：<br/>
@@ -43,7 +45,9 @@ pub struct XHeader<'a> {
 
 /// x-oss-meta-* Header<br/>
 /// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
+// TODO 这里有多处用到此类型，需要把这个类型从type转化为struct，然后imple：add_key_prefix() -> 添加前缀后的HashMap<String,String>
 pub type XOtherHeader<'a> = HashMap<&'a str, &'a str>;
+
 // endregion: --- pub object
 
 // region:    --- get object
@@ -92,6 +96,35 @@ pub struct CopyObjectResult {
     pub last_modified: String,
 }
 // endregion: --- copy object
+
+// region:    --- append object
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct AppendObjectCHeader<'a> {
+    // contet_md5, position将根据函数自动添加
+    pub cache_control: Option<&'a str>,
+    pub content_disposition: Option<&'a str>,
+    pub content_encoding: Option<&'a str>,
+    pub expires: Option<&'a str>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct AppendObjectXHeader<'a> {
+    pub x_oss_server_side_encryption: Option<&'a str>,
+    pub x_oss_object_acl: Option<&'a str>,
+    pub x_oss_storage_class: Option<&'a str>,
+    pub x_oss_tagging: Option<&'a str>,
+}
+
+#[derive(Debug)]
+pub struct AppendObjectResponseHeaderInfo {
+    pub x_oss_next_append_position: u64,
+    pub x_oss_hash_crc64ecma: u64,
+}
+// endregion: --- append object
 
 impl OSSClient {
     /// 本API将会一次性读取文件到内存然后进行上传，请注意上传文件的大小以免爆内存<br/>
@@ -306,5 +339,101 @@ impl OSSClient {
         })?;
 
         Ok(res)
+    }
+
+    /// - 当创建一个新的Appendable Object的时候，`position`设为`0`，如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
+    pub async fn append_object(
+        &self,
+        bytes: Vec<u8>,
+        dest_path: &str,
+        content_type: Option<&str>,
+        position: u64,
+        c_header: AppendObjectCHeader<'_>,
+        x_header: AppendObjectXHeader<'_>,
+        x_meta_header: Option<HashMap<&str, &str>>,
+    ) -> Result<AppendObjectResponseHeaderInfo, Error> {
+        let mut header_map = HashMap::new();
+        let c_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
+        header_map.extend(c_header_map);
+
+        let mut x_header_map: BTreeMap<String, String> =
+            serde_json::from_value(serde_json::to_value(x_header).unwrap()).unwrap();
+        if let Some(s) = x_meta_header {
+            let mut x_meta_header_map: BTreeMap<String, String> = s
+                .into_iter()
+                .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_owned()))
+                .collect();
+            x_header_map.append(&mut x_meta_header_map);
+        }
+
+        let content_type = if let Some(s) = content_type {
+            s.to_owned()
+        } else {
+            mime_guess::MimeGuess::from_path(dest_path)
+                .first_or_octet_stream()
+                .to_string()
+        };
+        let now_gmt = now_gmt();
+        let contet_md5 = get_content_md5(&bytes);
+        // `https://bucket.endpoint`之后的内容为object_path，`&object_path[1..]`即为此次的`object_name`
+        let object_path = format!("{}?append&position={}", dest_path, position);
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "POST",
+            Some(&contet_md5),
+            Some(&content_type),
+            &now_gmt,
+            Some(&x_header_map),
+            Some(&self.bucket),
+            Some(&object_path[1..]),
+        );
+
+        header_map.extend(x_header_map);
+        let common_header_map = self.get_common_header_map(
+            &authorization,
+            Some(&bytes.len().to_string()),
+            Some(&content_type),
+            &now_gmt,
+        );
+        header_map.extend(common_header_map);
+        header_map.insert("Content-MD5".to_owned(), contet_md5);
+        header_map.insert("Position".to_owned(), position.to_string());
+
+        let header_map = into_header_map(header_map);
+
+        let builder = self
+            .http_client
+            .post(format!("{}{}", self.bucket_url(), object_path))
+            .headers(header_map)
+            .body(bytes);
+        // println!("builder: {:#?}", builder);
+        let resp = builder.send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+        // println!("resp:{:#?}", resp);
+        let resp_headers = resp.headers();
+        // 下面直接使用unwrap()，默认不会出错，如果实际中出现错误，这里代码要优化
+        let next_pos: u64 = resp_headers
+            .get("x-oss-next-append-position")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        let crc: u64 = resp_headers
+            .get("x-oss-hash-crc64ecma")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        Ok(AppendObjectResponseHeaderInfo {
+            x_oss_next_append_position: next_pos,
+            x_oss_hash_crc64ecma: crc,
+        })
     }
 }

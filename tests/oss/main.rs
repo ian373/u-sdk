@@ -229,3 +229,35 @@ async fn copy_object_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn append_object_test() {
+    use oss::object::basic::*;
+
+    let client = get_oss_client();
+
+    let c_header = AppendObjectCHeader::default();
+    let x_header = AppendObjectXHeader::default();
+
+    let res = client
+        .append_object(
+            b"test123".to_vec(),
+            "/test_path/123.txt",
+            None,
+            14,
+            c_header,
+            x_header,
+            None,
+        )
+        .await;
+
+    match res {
+        Ok(s) => {
+            println!("OK: {:#?}", s);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("{}", e),
+        },
+    }
+}
