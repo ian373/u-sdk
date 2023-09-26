@@ -47,14 +47,6 @@ pub struct XHeader<'a> {
 /// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
 pub struct XMetaHeader(BTreeMap<String, String>);
 
-// impl XMetaHeader<'_> {
-//     pub(crate) fn into_meta_map(self) -> BTreeMap<String, String> {
-//         self.0
-//             .into_iter()
-//             .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_owned()))
-//             .collect()
-//     }
-// }
 impl From<HashMap<&str, &str>> for XMetaHeader {
     fn from(value: HashMap<&str, &str>) -> Self {
         let map = value
