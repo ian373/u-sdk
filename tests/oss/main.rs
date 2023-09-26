@@ -152,8 +152,8 @@ async fn put_object_test() {
         .put_object(
             c_header,
             x_header,
-            x_meta_map.into(),
-            r"C:\ex\a\123.txt",
+            Some(x_meta_map.into()),
+            r"C:\Users\123.TXT",
             "/test_file/",
             None,
         )
@@ -244,7 +244,7 @@ async fn append_object_test() {
             b"test123".to_vec(),
             "/test_path/123.txt",
             None,
-            14,
+            21,
             c_header,
             x_header,
             None,

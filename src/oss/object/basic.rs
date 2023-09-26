@@ -153,7 +153,7 @@ impl OSSClient {
         &self,
         c_header: CHeader<'_>,
         x_header: XHeader<'_>,
-        mut x_meta_header: XMetaHeader,
+        x_meta_header: Option<XMetaHeader>,
         local_file_path: &str,
         dest_path: &str,
         content_type: Option<&str>,
@@ -180,7 +180,9 @@ impl OSSClient {
 
         let mut oss_header_map = BTreeMap::new();
         oss_header_map.append(&mut x_header_map);
-        oss_header_map.append(&mut x_meta_header.0);
+        if let Some(mut m) = x_meta_header {
+            oss_header_map.append(&mut m.0);
+        }
 
         let now_gmt = now_gmt();
         let dest_path = get_dest_path(dest_path, &local_file_name)?;
@@ -362,7 +364,7 @@ impl OSSClient {
         position: u64,
         c_header: AppendObjectCHeader<'_>,
         x_header: AppendObjectXHeader<'_>,
-        x_meta_header: Option<HashMap<&str, &str>>,
+        x_meta_header: Option<XMetaHeader>,
     ) -> Result<AppendObjectResponseHeaderInfo, Error> {
         let mut header_map = HashMap::new();
         let c_header_map: HashMap<String, String> =
@@ -371,12 +373,8 @@ impl OSSClient {
 
         let mut x_header_map: BTreeMap<String, String> =
             serde_json::from_value(serde_json::to_value(x_header).unwrap()).unwrap();
-        if let Some(s) = x_meta_header {
-            let mut x_meta_header_map: BTreeMap<String, String> = s
-                .into_iter()
-                .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_owned()))
-                .collect();
-            x_header_map.append(&mut x_meta_header_map);
+        if let Some(mut m) = x_meta_header {
+            x_header_map.append(&mut m.0);
         }
 
         let content_type = if let Some(s) = content_type {
