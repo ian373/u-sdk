@@ -353,6 +353,7 @@ impl OSSClient {
     }
 
     /// - 当创建一个新的Appendable Object的时候，`position`设为`0`，如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
+    #[allow(clippy::too_many_arguments)]
     pub async fn append_object(
         &self,
         bytes: Vec<u8>,
