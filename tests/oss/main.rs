@@ -261,3 +261,20 @@ async fn append_object_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn delete_object_test() {
+    let client = get_oss_client();
+
+    let res = client.delete_object("/123.txt").await;
+
+    match res {
+        Ok(_) => {
+            println!("OK!");
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("{}", e),
+        },
+    }
+}

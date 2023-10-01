@@ -438,4 +438,33 @@ impl OSSClient {
             x_oss_hash_crc64ecma: crc,
         })
     }
+
+    pub async fn delete_object(&self, oss_path: &str) -> Result<(), Error> {
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "DELETE",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(&self.bucket),
+            Some(&oss_path[1..]),
+        );
+
+        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        let header_map = into_header_map(common_header);
+
+        let builder = self
+            .http_client
+            .delete(format!("{}{}", self.bucket_url(), oss_path))
+            .headers(header_map);
+        let resp = builder.send().await?;
+        if resp.status() != StatusCode::NON_AUTHORITATIVE_INFORMATION {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        Ok(())
+    }
 }
