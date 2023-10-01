@@ -1,5 +1,6 @@
 mod test_config;
 
+use oss::object::types::*;
 use u_ali_sdk::error::Error;
 use u_ali_sdk::oss;
 
@@ -135,7 +136,6 @@ async fn get_bucket_stat_test() {
 
 #[tokio::test]
 async fn put_object_test() {
-    use oss::object::basic::*;
     use std::collections::HashMap;
 
     let client = get_oss_client();
@@ -170,8 +170,6 @@ async fn put_object_test() {
 
 #[tokio::test]
 async fn get_object_test() {
-    use oss::object::basic::*;
-
     let client = get_oss_client();
 
     let c_header = GetObjectHeader {
@@ -200,8 +198,6 @@ async fn get_object_test() {
 
 #[tokio::test]
 async fn copy_object_test() {
-    use oss::object::basic::*;
-
     let client = get_oss_client();
 
     let x_header = CopyObjectXHeader {
@@ -232,8 +228,6 @@ async fn copy_object_test() {
 
 #[tokio::test]
 async fn append_object_test() {
-    use oss::object::basic::*;
-
     let client = get_oss_client();
 
     let c_header = AppendObjectCHeader::default();
