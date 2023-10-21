@@ -127,3 +127,34 @@ pub struct AppendObjectResponseHeaderInfo {
     pub x_oss_hash_crc64ecma: u64,
 }
 // endregion: --- append object
+
+// region:    --- delete_multiple_objects
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteMultipleObjectsRequest<'a> {
+    pub quiet: &'a str,
+    pub object: Vec<DeleteObject<'a>>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteObject<'a> {
+    pub key: &'a str,
+    pub version_id: Option<&'a str>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteResult {
+    pub deleted: Vec<Deleted>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Deleted {
+    pub key: String,
+    pub delete_marker: Option<String>,
+    pub delete_marker_version_id: Option<String>,
+}
+// endregion: --- delete_multiple_objects

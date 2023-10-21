@@ -272,3 +272,31 @@ async fn delete_object_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn delete_multiple_objects_test() {
+    let client = get_oss_client();
+
+    let objs = vec![
+        DeleteObject {
+            key: "test_dir/123.TXT",
+            version_id: None,
+        },
+        DeleteObject {
+            key: "test_file/1234567890.txt",
+            version_id: None,
+        },
+    ];
+
+    let res = client.delete_multiple_objects(None, objs, false).await;
+
+    match res {
+        Ok(s) => {
+            println!("ok_res:{:#?}", s);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
+            _ => println!("{}", e),
+        },
+    }
+}

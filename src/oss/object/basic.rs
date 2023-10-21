@@ -343,4 +343,70 @@ impl OSSClient {
 
         Ok(())
     }
+
+    /// 注意，删除多个文件的时候，你的`DeleteObject::key`填的是文件名称，这和[put_object]的参数有所不同：
+    /// 这里的key需要去掉`oss_path`前面的斜杠`\`，如：
+    /// - oss_path: `/aa/123.txt`
+    /// - key需要写为：`aa/123/txt`
+    pub async fn delete_multiple_objects(
+        &self,
+        encoding_type: Option<&str>,
+        delete_objects: Vec<DeleteObject<'_>>,
+        quiet_resp: bool,
+    ) -> Result<Option<DeleteResult>, Error> {
+        let delete_req = DeleteMultipleObjectsRequest {
+            quiet: &quiet_resp.to_string(),
+            object: delete_objects,
+        };
+        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req).unwrap();
+
+        let content_length = req_body.len();
+        let content_md5 = get_content_md5(req_body.as_bytes());
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "POST",
+            Some(&content_md5),
+            None,
+            &now_gmt,
+            None,
+            Some(&self.bucket),
+            Some("?delete"),
+        );
+
+        let mut common_header = self.get_common_header_map(
+            &authorization,
+            Some(&content_length.to_string()),
+            None,
+            &now_gmt,
+        );
+        common_header.insert("Content-MD5".to_owned(), content_md5);
+        if let Some(s) = encoding_type {
+            common_header.insert("Encoding-type".to_owned(), s.to_owned());
+        }
+        let header_map = into_header_map(common_header);
+
+        let builder = self
+            .http_client
+            .post(format!("{}/?delete", self.bucket_url()))
+            .headers(header_map)
+            .body(req_body);
+        let resp = builder.send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+
+        if quiet_resp {
+            return Ok(None);
+        }
+
+        let text = resp.text().await?;
+        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
+            source: e,
+            origin_text: text,
+        })?;
+
+        Ok(Some(res))
+    }
 }
