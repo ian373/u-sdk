@@ -451,4 +451,40 @@ impl OSSClient {
 
         Ok(response_header)
     }
+
+    /// - 这里返回`HashMap`而没有返回struct，主要考虑到response header中有一些参数文档中没说出来，不便于转化为指定的struct
+    /// - 返回的`HashMap`中所有的`key`均为小写，这里代码并没有使用`to_lowercase`，因为`reqwest`获取的header都为小写
+    pub async fn get_object_meta(&self, oss_path: &str) -> Result<HashMap<String, String>, Error> {
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "HEAD",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(&self.bucket),
+            Some(&format!("{}?objectMeta", &oss_path[1..])),
+        );
+
+        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        let header_map = into_header_map(common_header);
+
+        let builder = self
+            .http_client
+            .head(format!("{}{}?objectMeta", self.bucket_url(), oss_path))
+            .headers(header_map);
+        let resp = builder.send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+        let response_header: HashMap<String, String> = resp
+            .headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
+            .collect();
+
+        Ok(response_header)
+    }
 }

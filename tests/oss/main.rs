@@ -321,3 +321,22 @@ async fn head_object_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn get_object_meta_test() {
+    let client = get_oss_client();
+
+    let res = client.get_object_meta("/test_path/123.txt").await;
+
+    match res {
+        Ok(s) => {
+            println!("ok_res:{:#?}", s);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => {
+                println!("error_text: {}", resp.text().await.unwrap())
+            }
+            _ => println!("other_e: {}", e),
+        },
+    }
+}
