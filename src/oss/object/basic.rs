@@ -344,7 +344,7 @@ impl OSSClient {
         Ok(())
     }
 
-    /// 注意，删除多个文件的时候，你的`DeleteObject::key`填的是文件名称，这和[put_object]的参数有所不同：
+    /// 注意，删除多个文件的时候，你的`DeleteObject::key`填的是文件名称，这和`put_object`的参数有所不同：
     /// 这里的key需要去掉`oss_path`前面的斜杠`\`，如：
     /// - oss_path: `/aa/123.txt`
     /// - key需要写为：`aa/123/txt`
