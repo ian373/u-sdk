@@ -348,6 +348,7 @@ impl OSSClient {
     /// 这里的key需要去掉`oss_path`前面的斜杠`\`，如：
     /// - oss_path: `/aa/123.txt`
     /// - key需要写为：`aa/123/txt`
+    // TODO MAYBE：其它的所有代码，其实object_name应该为a/abc/c这种，然后代码自己添加/->/a/abc/c才合理。还是说这里统一一下使用/a/abc/c？
     pub async fn delete_multiple_objects(
         &self,
         encoding_type: Option<&str>,
@@ -408,5 +409,46 @@ impl OSSClient {
         })?;
 
         Ok(Some(res))
+    }
+
+    pub async fn head_object(
+        &self,
+        oss_path: &str,
+        req_header: HeadObjectHeader<'_>,
+    ) -> Result<HashMap<String, String>, Error> {
+        let now_gmt = now_gmt();
+        let authorization = sign_authorization(
+            &self.access_key_id,
+            &self.access_key_secret,
+            "HEAD",
+            None,
+            None,
+            &now_gmt,
+            None,
+            Some(&self.bucket),
+            Some(&oss_path[1..]),
+        );
+
+        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        let req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(&req_header).unwrap()).unwrap();
+        common_header.extend(req_header_map);
+        let header_map = into_header_map(common_header);
+
+        let builder = self
+            .http_client
+            .head(format!("{}{}", self.bucket_url(), oss_path))
+            .headers(header_map);
+        let resp = builder.send().await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+        let response_header: HashMap<String, String> = resp
+            .headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
+            .collect();
+
+        Ok(response_header)
     }
 }

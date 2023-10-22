@@ -158,3 +158,15 @@ pub struct Deleted {
     pub delete_marker_version_id: Option<String>,
 }
 // endregion: --- delete_multiple_objects
+
+// region:    --- head object
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct HeadObjectHeader<'a> {
+    pub if_modified_since: Option<&'a str>,
+    pub if_unmodified_since: Option<&'a str>,
+    pub if_match: Option<&'a str>,
+    pub if_none_match: Option<&'a str>,
+}
+// endregion: --- head object

@@ -300,3 +300,24 @@ async fn delete_multiple_objects_test() {
         },
     }
 }
+
+#[tokio::test]
+async fn head_object_test() {
+    let client = get_oss_client();
+
+    let req_header = HeadObjectHeader::default();
+
+    let res = client.head_object("/test_path/123.txt", req_header).await;
+
+    match res {
+        Ok(s) => {
+            println!("ok_res:{:#?}", s);
+        }
+        Err(e) => match e {
+            Error::StatusCodeNot200Resp(resp) => {
+                println!("error_text: {}", resp.text().await.unwrap())
+            }
+            _ => println!("other_e: {}", e),
+        },
+    }
+}
