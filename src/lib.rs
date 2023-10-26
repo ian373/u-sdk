@@ -4,6 +4,12 @@
 //! - 邮件推送(`email`)部分功能
 //! - OSS(`oss`)部分功能
 //!
+//! # Example
+//!
+//! 使用示例请查看项目根目录下`/tests/`文件夹，在每一个功能模块的文件夹下，在`test_config`目录下，创建`test_config.toml`文件并参考`config.sample.toml`配置好相关选项。
+//!
+//! 然后选择`./tests/main.rs`中的一个测试方法，如`get_object_meta_test()`，输入`cargo test --all-features get_object_meta_test --show-output --exact`来运行相关示例。
+//!
 //! # 说明
 //!
 //! - `blocking`为同步API，同步的API都在此模块下。
