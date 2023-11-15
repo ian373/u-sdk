@@ -1,4 +1,5 @@
 pub mod basic;
-pub mod types;
+mod multipart_upload;
 
+pub mod types;
 pub(crate) mod utils;

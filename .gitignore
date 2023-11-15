@@ -2,3 +2,5 @@
 /Cargo.lock
 
 /tests/**/config.toml
+
+/.idea
