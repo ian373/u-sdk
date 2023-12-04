@@ -17,6 +17,7 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
         .replace('*', "%2A")
         .replace("%7E", "~");
 
+    // TODO 这里可以不需要使用[percent_encoding]这个crate，可以直接使用url，详情查看：crate::translate::open_api_sign
     let percent_encode_string = utf8_percent_encode(&canonicalized_query_string, NON_ALPHANUMERIC)
         .to_string()
         .replace("%2D", "-")
