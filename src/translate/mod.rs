@@ -1,6 +1,7 @@
 //! TranslateGeneral - 机器翻译通用版调用，同步方法
 
 mod open_api_sign;
+mod trans;
 mod utils;
 
 pub struct TransClient {
@@ -9,6 +10,7 @@ pub struct TransClient {
     http_client: reqwest::blocking::Client,
     qps: u8,
     max_text_len: u32,
+    host: String,
 }
 
 impl TransClient {
@@ -24,6 +26,7 @@ impl TransClient {
             http_client: reqwest::blocking::Client::new(),
             qps,
             max_text_len,
+            host,
         }
     }
 }
