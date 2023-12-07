@@ -3,7 +3,7 @@ use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use time::OffsetDateTime;
-use url::{form_urlencoded, Url};
+use url::Url;
 
 use crate::error::Error;
 
@@ -36,24 +36,24 @@ pub struct SignParams<'a> {
 pub(crate) fn generate_can_uri(
     host: &str,
     query_map: &BTreeMap<String, String>,
-) -> Result<(String, String), Error> {
+) -> Result<(String, String, String), Error> {
     let u = Url::parse_with_params(&format!("https://{}", host), query_map)
         .map_err(|_| Error::CommonError("url parsed failed!".to_owned()))?;
     let can_uri = u
         .path()
         .to_owned()
         // Url::parse过后，即percentEncode后，按照文档替换相关字符
-        .replace("%2D", "-")
-        .replace("%5F", "_")
-        .replace("%2E", ".");
-    Ok((can_uri, u.to_string()))
-}
-
-// CanonicalQueryString
-pub(crate) fn generate_can_query_str(query_map: &BTreeMap<String, String>) -> String {
-    form_urlencoded::Serializer::new(String::new())
-        .extend_pairs(query_map)
-        .finish()
+        ;
+    let can_query_str;
+    if let Some(s) = u.query() {
+        can_query_str = s
+            .replace("+", "%20")
+            .replace("*", "%2A")
+            .replace("%7E", "~")
+    } else {
+        can_query_str = "".to_owned()
+    };
+    Ok((can_uri, u.to_string(), can_query_str))
 }
 
 pub struct GenerateCanHeadersRes {
@@ -75,7 +75,7 @@ pub(crate) fn generate_can_headers(
     let mut need_signed_headers = BTreeMap::new();
     need_signed_headers.insert("x-acs-action".to_owned(), x_acs_action.to_owned());
     need_signed_headers.insert("x-acs-version".to_owned(), x_acs_version.to_owned());
-    let timestamp = OffsetDateTime::now_utc().unix_timestamp().to_string();
+    let timestamp = OffsetDateTime::now_utc().unix_timestamp_nanos().to_string();
     need_signed_headers.insert("x-acs-signature-nonce".to_owned(), timestamp.clone());
     let date = now_iso8601();
     need_signed_headers.insert("x-acs-date".to_owned(), date.clone());
@@ -118,10 +118,9 @@ pub(crate) fn generate_can_headers(
         "x-acs-content-sha256".to_owned(),
         x_acs_content_sha256.to_owned(),
     );
-    common_headers.insert(
-        "x-acs-security-token".to_owned(),
-        x_acs_security_token.unwrap_or("").to_owned(),
-    );
+    if let Some(s) = x_acs_security_token {
+        common_headers.insert("x-acs-security-token".to_owned(), s.to_owned());
+    }
 
     GenerateCanHeadersRes {
         can_headers,
@@ -131,14 +130,14 @@ pub(crate) fn generate_can_headers(
 }
 
 pub(crate) fn hash_sha256(bytes: Option<&[u8]>) -> String {
+    let mut hasher = Sha256::new();
     if let Some(b) = bytes {
-        let mut hasher = Sha256::new();
         hasher.update(b);
-        let res = hasher.finalize();
-        hex::encode(res)
     } else {
-        "".to_owned()
-    }
+        hasher.update(b"");
+    };
+    let hash_str = hasher.finalize();
+    hex::encode(hash_str)
 }
 
 pub(crate) fn sign_hmac_sha256(secret: &str, str_to_sign: &str) -> String {
@@ -151,11 +150,13 @@ pub(crate) fn sign_hmac_sha256(secret: &str, str_to_sign: &str) -> String {
 
 pub(crate) fn get_common_headers(
     access_key_secret: &str,
+    access_key_id: &str,
     sign_params: SignParams,
 ) -> (HashMap<String, String>, String) {
     // region    --- sign authorization
-    let (can_uri, url_) = generate_can_uri(sign_params.host, sign_params.query_map).unwrap();
-    let can_query_str = generate_can_query_str(sign_params.query_map);
+    let (can_uri, url_, can_query_str) =
+        generate_can_uri(sign_params.host, sign_params.query_map).unwrap();
+    // println!("can_uri:{}\nurl:{}", can_uri, url_);
     // 选择使用文档中的ACS3-HMAC-SHA256算法
     let body_hash = hash_sha256(sign_params.body_bytes);
     let generate_can_headers_res = generate_can_headers(
@@ -176,13 +177,20 @@ pub(crate) fn get_common_headers(
         generate_can_headers_res.can_signed_headers,
         body_hash
     );
+    // println!("can_req_str:\n{:#?}", can_req_str);
     let hashed_str = hash_sha256(Some(can_req_str.as_bytes()));
     let str_to_sign = format!("ACS3-HMAC-SHA256\n{hashed_str}");
-    let authorization = sign_hmac_sha256(access_key_secret, &str_to_sign);
+    // println!("str_to_sign:\n{:#?}", str_to_sign);
+    let signature = sign_hmac_sha256(access_key_secret, &str_to_sign);
+    // println!("signature:\n{:#?}", signature);
     // endregion --- sign authorization
 
     let mut common_headers = generate_can_headers_res.common_headers;
     // 覆盖没有的值
+    let authorization = format!(
+        "ACS3-HMAC-SHA256 Credential={},SignedHeaders={},Signature={}",
+        access_key_id, generate_can_headers_res.can_signed_headers, signature
+    );
     common_headers.insert("Authorization".to_owned(), authorization);
     common_headers.insert("host".to_owned(), sign_params.host.to_owned());
 

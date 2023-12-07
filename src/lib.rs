@@ -39,4 +39,4 @@ pub mod oss;
 
 pub mod error;
 #[cfg(feature = "gen-trans")]
-mod translate;
+pub mod translate;

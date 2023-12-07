@@ -17,7 +17,8 @@ pub struct GeneralTranslateQuery {
 }
 
 impl TransClient {
-    pub fn general_translate(&self, query: GeneralTranslateQuery) {
+    // TODO 进行最大长度检查，删除qps参数
+    pub async fn general_translate(&self, query: GeneralTranslateQuery) {
         let query_map = serde_json::from_value(serde_json::to_value(query).unwrap()).unwrap();
 
         let sign_params = SignParams {
@@ -30,15 +31,13 @@ impl TransClient {
             x_acs_version: "2018-10-12",
             x_acs_security_token: None,
         };
-        let (common_headers, url_) = get_common_headers(&self.access_key_secret, sign_params);
+        let (common_headers, url_) =
+            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params);
 
         let header_map = into_header_map(common_headers);
-        let res = self
-            .http_client
-            .get(url_)
-            .headers(header_map)
-            .send()
-            .unwrap();
-        println!("response:\n{}", res.text().unwrap());
+        let request = self.http_client.get(url_).headers(header_map);
+        // println!("request:\n{:#?}", request);
+        let res = request.send().await.unwrap();
+        println!("text:\n{:#?}", res.text().await.unwrap());
     }
 }
