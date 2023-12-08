@@ -64,8 +64,8 @@ pub(crate) struct GenerateCanHeadersRes {
 // CanonicalizedHeaders
 pub(crate) fn generate_can_headers(
     x_header: Option<&BTreeMap<String, String>>,
-    // host可选，按照文档没host也行的，但是加个host安全点
-    host: Option<&str>,
+    // 按照官方签名文档没提到要host，但是官方签名示例加了个host，所以这里也加个host
+    host: &str,
     x_acs_action: &str,
     x_acs_version: &str,
     x_acs_security_token: Option<&str>,
@@ -74,6 +74,7 @@ pub(crate) fn generate_can_headers(
     let mut need_signed_headers = BTreeMap::new();
     need_signed_headers.insert("x-acs-action".to_owned(), x_acs_action.to_owned());
     need_signed_headers.insert("x-acs-version".to_owned(), x_acs_version.to_owned());
+    // 使用时间戳当随机数
     let timestamp = OffsetDateTime::now_utc().unix_timestamp_nanos().to_string();
     need_signed_headers.insert("x-acs-signature-nonce".to_owned(), timestamp.clone());
     let date = now_iso8601();
@@ -86,9 +87,7 @@ pub(crate) fn generate_can_headers(
             .collect();
         need_signed_headers.extend(x_header);
     }
-    if let Some(h) = host {
-        need_signed_headers.insert("host".to_owned(), h.trim().to_owned());
-    };
+    need_signed_headers.insert("host".to_owned(), host.trim().to_owned());
     if let Some(s) = x_acs_security_token {
         need_signed_headers.insert("x-acs-security-token".to_owned(), s.trim().to_owned());
     }
@@ -99,27 +98,14 @@ pub(crate) fn generate_can_headers(
 
     let mut can_headers = String::new();
     let mut can_signed_headers = String::new();
-    for (k, v) in need_signed_headers {
+    for (k, v) in &need_signed_headers {
         can_headers.push_str(format!("{k}:{v}\n").as_str());
         can_signed_headers.push_str(format!("{k};").as_str());
     }
     // 删除最后一个没用的`;`
     can_signed_headers.pop();
 
-    let mut common_headers = HashMap::new();
-    common_headers.insert("x-acs-action".to_owned(), x_acs_action.to_owned());
-    common_headers.insert("x-acs-version".to_owned(), x_acs_version.to_owned());
-    common_headers.insert("Authorization".to_owned(), "".to_owned());
-    common_headers.insert("x-acs-signature-nonce".to_owned(), timestamp);
-    common_headers.insert("x-acs-date".to_owned(), date);
-    common_headers.insert("host".to_owned(), "".to_owned());
-    common_headers.insert(
-        "x-acs-content-sha256".to_owned(),
-        x_acs_content_sha256.to_owned(),
-    );
-    if let Some(s) = x_acs_security_token {
-        common_headers.insert("x-acs-security-token".to_owned(), s.to_owned());
-    }
+    let common_headers = need_signed_headers.into_iter().collect::<HashMap<_, _>>();
 
     GenerateCanHeadersRes {
         can_headers,
@@ -158,7 +144,7 @@ pub(crate) fn get_common_headers(
     let body_hash = hash_sha256(sign_params.body_bytes);
     let generate_can_headers_res = generate_can_headers(
         sign_params.x_headers,
-        Some(sign_params.host),
+        sign_params.host,
         sign_params.x_acs_action,
         sign_params.x_acs_version,
         sign_params.x_acs_security_token,
@@ -174,22 +160,18 @@ pub(crate) fn get_common_headers(
         generate_can_headers_res.can_signed_headers,
         body_hash
     );
-    // println!("can_req_str:\n{:#?}", can_req_str);
     let hashed_str = hash_sha256(Some(can_req_str.as_bytes()));
     let str_to_sign = format!("ACS3-HMAC-SHA256\n{hashed_str}");
-    // println!("str_to_sign:\n{:#?}", str_to_sign);
     let signature = sign_hmac_sha256(access_key_secret, &str_to_sign);
-    // println!("signature:\n{:#?}", signature);
     // endregion --- sign authorization
 
     let mut common_headers = generate_can_headers_res.common_headers;
-    // 覆盖没有的值
     let authorization = format!(
         "ACS3-HMAC-SHA256 Credential={},SignedHeaders={},Signature={}",
         access_key_id, generate_can_headers_res.can_signed_headers, signature
     );
+    // 把Authorization加入common_headers构成最终的公共请求头
     common_headers.insert("Authorization".to_owned(), authorization);
-    common_headers.insert("host".to_owned(), sign_params.host.to_owned());
 
     Ok((common_headers, url_))
 }
