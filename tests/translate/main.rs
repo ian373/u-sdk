@@ -7,8 +7,6 @@ fn get_trans_client() -> TransClient {
         conf.access_key_id,
         conf.access_key_secret,
         "mt.aliyuncs.com".to_owned(),
-        50,
-        5000,
     )
 }
 
@@ -19,9 +17,13 @@ async fn translate_general_test() {
         format_type: "text".to_owned(),
         source_language: "en".to_owned(),
         target_language: "zh".to_owned(),
-        source_text: "this is a test.".to_owned(),
+        source_text: "test first line.\ntest second line.".to_owned(),
         scene: "general".to_owned(),
         context: None,
     };
-    client.general_translate(query).await;
+    let res = client.general_translate(query).await;
+    match res {
+        Ok(s) => println!("res:\n{:?}", s),
+        Err(e) => println!("{:?}", e),
+    }
 }
