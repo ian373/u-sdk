@@ -1,10 +1,10 @@
-use crate::email::utils::now_iso8601;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use time::OffsetDateTime;
 use url::Url;
 
+use crate::email::utils::now_iso8601;
 use crate::error::Error;
 
 // 阿里云签名文档链接：https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
@@ -20,7 +20,7 @@ use crate::error::Error;
 //     pub x_acs_security_token: Option<String>,
 // }
 
-pub struct SignParams<'a> {
+pub(crate) struct SignParams<'a> {
     pub req_method: &'a str,
     pub host: &'a str,
     pub query_map: &'a BTreeMap<String, String>,
@@ -56,7 +56,7 @@ pub(crate) fn generate_can_uri(
     Ok((can_uri, u.to_string(), can_query_str))
 }
 
-pub struct GenerateCanHeadersRes {
+pub(crate) struct GenerateCanHeadersRes {
     pub can_headers: String,
     pub can_signed_headers: String,
     pub common_headers: HashMap<String, String>,
