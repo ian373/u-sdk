@@ -1,39 +1,10 @@
 use super::open_api_sign::{get_common_headers, SignParams};
+use super::types_rs::*;
 use super::TransClient;
 use crate::error::Error;
 use crate::oss::utils::into_header_map;
 
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct GeneralTranslateQuery {
-    pub format_type: String,
-    pub source_language: String,
-    pub target_language: String,
-    pub source_text: String,
-    pub scene: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<String>,
-}
-
-// region    --- general translate response
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub(crate) struct GeneralTransSuccessRespPart {
-    // pub request_id: String,
-    pub data: GTResponseDataPart,
-    // pub code: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub(crate) struct GTResponseDataPart {
-    // pub word_count: String,
-    pub translated: String,
-}
-// endregion --- general translate response
 
 impl TransClient {
     /// - [api文档地址](https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral)

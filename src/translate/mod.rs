@@ -2,6 +2,7 @@
 
 pub mod open_api_sign;
 pub mod trans;
+pub mod types_rs;
 
 pub struct TransClient {
     access_key_id: String,
