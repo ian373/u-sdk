@@ -47,8 +47,8 @@ pub(crate) fn generate_can_uri(
     let can_query_str;
     if let Some(s) = u.query() {
         can_query_str = s
-            .replace("+", "%20")
-            .replace("*", "%2A")
+            .replace('+', "%20")
+            .replace('*', "%2A")
             .replace("%7E", "~")
     } else {
         can_query_str = "".to_owned()
@@ -82,7 +82,7 @@ pub(crate) fn generate_can_headers(
 
     if let Some(h) = x_header {
         let x_header: BTreeMap<String, String> = h
-            .into_iter()
+            .iter()
             .map(|(k, v)| (k.to_lowercase(), v.trim().to_owned()))
             .collect();
         need_signed_headers.extend(x_header);
