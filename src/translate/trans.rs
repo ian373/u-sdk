@@ -7,7 +7,7 @@ use crate::oss::utils::into_header_map;
 use reqwest::StatusCode;
 
 impl TransClient {
-    /// - [api文档地址](https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral)
+    /// - <a href="https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral" target="_blank">api文档地址</a>
     ///
     /// 注意事项
     /// 1. QPS限制50
@@ -30,7 +30,7 @@ impl TransClient {
             x_acs_security_token: None,
         };
         let (common_headers, url_) =
-            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params);
+            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)?;
 
         let header_map = into_header_map(common_headers);
         let resp = self

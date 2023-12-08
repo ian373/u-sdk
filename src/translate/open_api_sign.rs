@@ -32,20 +32,17 @@ pub(crate) struct SignParams<'a> {
 }
 
 // CanonicalURI
-// 如果资源路径uri为`None`，则返回`/`
+// return: (CanonicalURI, 完整的url用于发送http请求, CanonicalQueryString)
 pub(crate) fn generate_can_uri(
     host: &str,
     query_map: &BTreeMap<String, String>,
 ) -> Result<(String, String, String), Error> {
     let u = Url::parse_with_params(&format!("https://{}", host), query_map)
         .map_err(|_| Error::CommonError("url parsed failed!".to_owned()))?;
-    let can_uri = u
-        .path()
-        .to_owned()
-        // Url::parse过后，即percentEncode后，按照文档替换相关字符
-        ;
+    let can_uri = u.path().to_owned();
     let can_query_str;
     if let Some(s) = u.query() {
+        // Url::parse过后，即percentEncode后，按照文档替换相关字符
         can_query_str = s
             .replace('+', "%20")
             .replace('*', "%2A")
@@ -57,15 +54,17 @@ pub(crate) fn generate_can_uri(
 }
 
 pub(crate) struct GenerateCanHeadersRes {
+    // CanonicalHeaders
     pub can_headers: String,
+    // SignedHeaders
     pub can_signed_headers: String,
+    // 公共请求头，当api调用的时候，直接把公共请求头加入请求的headers即可
     pub common_headers: HashMap<String, String>,
 }
 // CanonicalizedHeaders
-// host可选，按照文档没host也行的，但是加个host安全点
-// return (can_headers, can_signed_headers)
 pub(crate) fn generate_can_headers(
     x_header: Option<&BTreeMap<String, String>>,
+    // host可选，按照文档没host也行的，但是加个host安全点
     host: Option<&str>,
     x_acs_action: &str,
     x_acs_version: &str,
@@ -152,11 +151,9 @@ pub(crate) fn get_common_headers(
     access_key_secret: &str,
     access_key_id: &str,
     sign_params: SignParams,
-) -> (HashMap<String, String>, String) {
+) -> Result<(HashMap<String, String>, String), Error> {
     // region    --- sign authorization
-    let (can_uri, url_, can_query_str) =
-        generate_can_uri(sign_params.host, sign_params.query_map).unwrap();
-    // println!("can_uri:{}\nurl:{}", can_uri, url_);
+    let (can_uri, url_, can_query_str) = generate_can_uri(sign_params.host, sign_params.query_map)?;
     // 选择使用文档中的ACS3-HMAC-SHA256算法
     let body_hash = hash_sha256(sign_params.body_bytes);
     let generate_can_headers_res = generate_can_headers(
@@ -194,5 +191,5 @@ pub(crate) fn get_common_headers(
     common_headers.insert("Authorization".to_owned(), authorization);
     common_headers.insert("host".to_owned(), sign_params.host.to_owned());
 
-    (common_headers, url_)
+    Ok((common_headers, url_))
 }

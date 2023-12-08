@@ -13,7 +13,7 @@ fn get_trans_client() -> TransClient {
 #[tokio::test]
 async fn translate_general_test() {
     let client = get_trans_client();
-    let query = trans::GeneralTranslateQuery {
+    let query = types_rs::GeneralTranslateQuery {
         format_type: "text".to_owned(),
         source_language: "en".to_owned(),
         target_language: "zh".to_owned(),
