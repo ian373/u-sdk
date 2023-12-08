@@ -1,6 +1,6 @@
 //! 关于Object操作/基础操作
 
-use super::types::*;
+use super::types_rs::*;
 use super::utils::get_local_file;
 use crate::error::Error;
 use crate::oss::object::utils::get_dest_path;

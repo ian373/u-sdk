@@ -1,6 +1,6 @@
 mod test_config;
 
-use oss::object::types::*;
+use oss::object::types_rs::*;
 use u_ali_sdk::error::Error;
 use u_ali_sdk::oss;
 
