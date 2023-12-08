@@ -10,7 +10,7 @@ email = []
 oss = ["dep:quick-xml"]
 blocking = ["reqwest/blocking"]
 # 通用机器翻译
-gen-trans = ["reqwest/blocking"]
+gen-trans = []
 
 [dependencies]
 # 签名相关
