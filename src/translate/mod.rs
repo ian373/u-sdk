@@ -1,4 +1,4 @@
-//! TranslateGeneral - 机器翻译通用版调用，同步方法
+//! 文本翻译
 
 pub mod open_api_sign;
 pub mod trans;
