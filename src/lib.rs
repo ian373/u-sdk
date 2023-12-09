@@ -34,5 +34,5 @@ pub mod email;
 pub mod oss;
 
 pub mod error;
-#[cfg(feature = "gen-trans")]
+#[cfg(feature = "translate")]
 pub mod translate;

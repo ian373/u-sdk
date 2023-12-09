@@ -9,8 +9,8 @@ edition = "2021"
 email = []
 oss = ["dep:quick-xml"]
 blocking = ["reqwest/blocking"]
-# 通用机器翻译
-gen-trans = []
+# 机器翻译
+translate = []
 
 [dependencies]
 # 签名相关
