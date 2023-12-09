@@ -11,19 +11,20 @@ fn get_trans_client() -> TransClient {
 }
 
 #[tokio::test]
-async fn translate_general_test() {
+async fn translate_test() {
     let client = get_trans_client();
-    let query = types_rs::GeneralTranslateQuery {
+    let query = types_rs::TranslateQuery {
         format_type: "text".to_owned(),
-        source_language: "en".to_owned(),
+        source_language: "auto".to_owned(),
         target_language: "zh".to_owned(),
         source_text: "test first line.\ntest second line.".to_owned(),
         scene: "general".to_owned(),
+        // scene: "description".to_owned(),
         context: None,
     };
-    let res = client.general_translate(query).await;
+    let res = client.translate(query).await;
     match res {
-        Ok(s) => println!("res:\n{:?}", s),
+        Ok(s) => println!("res:\n{:#?}", s),
         Err(e) => println!("{:?}", e),
     }
 }
