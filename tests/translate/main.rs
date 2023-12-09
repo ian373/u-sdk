@@ -25,6 +25,16 @@ async fn translate_test() {
     let res = client.translate(query).await;
     match res {
         Ok(s) => println!("res:\n{:#?}", s),
-        Err(e) => println!("{:?}", e),
+        Err(e) => println!("{:#?}", e),
+    }
+}
+
+#[tokio::test]
+async fn get_detect_language_test() {
+    let client = get_trans_client();
+    let res = client.get_detect_language("中文").await;
+    match res {
+        Ok(s) => println!("res:\n{}", s),
+        Err(e) => println!("{:#?}", e),
     }
 }

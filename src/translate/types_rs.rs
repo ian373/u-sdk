@@ -32,3 +32,9 @@ pub struct TransResponseDataPart {
 }
 
 // endregion --- translate
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct GetDetectLanguageResp {
+    pub detected_language: String,
+}

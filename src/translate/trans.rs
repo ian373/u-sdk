@@ -3,10 +3,13 @@ use super::types_rs::*;
 use super::TransClient;
 use crate::error::Error;
 use crate::oss::utils::into_header_map;
+use std::collections::BTreeMap;
 
 use reqwest::StatusCode;
 
 /// > <a href="https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral" target="_blank">api文档地址</a>
+///
+/// 注意：使用翻译的不同的api，需要在控制台开启相应的服务
 impl TransClient {
     /// 机器翻译-通用版和专业版
     ///
@@ -57,5 +60,42 @@ impl TransClient {
         } else {
             Ok(res.data.unwrap())
         }
+    }
+
+    pub async fn get_detect_language(&self, source_text: &str) -> Result<String, Error> {
+        if source_text.len() > 5000 {
+            return Err(Error::CommonError("字符长度上限是5000字符".to_owned()));
+        }
+
+        let mut query_map = BTreeMap::new();
+        query_map.insert("SourceText".to_owned(), source_text.to_owned());
+
+        let sign_params = SignParams {
+            req_method: "GET",
+            host: &self.host,
+            query_map: &query_map,
+            x_headers: None,
+            body_bytes: None,
+            x_acs_action: "GetDetectLanguage",
+            x_acs_version: "2018-10-12",
+            x_acs_security_token: None,
+        };
+
+        let (common_headers, url_) =
+            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)?;
+
+        let header_map = into_header_map(common_headers);
+        let resp = self
+            .http_client
+            .get(url_)
+            .headers(header_map)
+            .send()
+            .await?;
+        if resp.status() != StatusCode::OK {
+            return Err(Error::StatusCodeNot200Resp(resp));
+        }
+        let res = resp.json::<GetDetectLanguageResp>().await?;
+
+        Ok(res.detected_language)
     }
 }
