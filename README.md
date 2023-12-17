@@ -1,11 +1,12 @@
 # 介绍
 
-阿里云服务 sdk，目前有以下模块：
+阿里云服务 sdk，目前有以下模块，async：
 
-- 邮件服务(email): async
-- 对象存储(oss): async
+- 邮件服务(email)
+- 对象存储(oss)
 - 文本翻译
-    - TranslateGeneral - 机器翻译通用版:async
+    - Translate - 机器翻译通用/专业版
+    - GetDetectLanguage - 语种识别
 
 # 如何使用
 
