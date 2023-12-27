@@ -25,14 +25,14 @@
 //! - 调用相应API时请注意你的RAM用户是否有相应得权限
 //!
 
+pub mod error;
+pub(crate) mod utils;
+
 #[cfg(feature = "blocking")]
 pub mod blocking;
-
 #[cfg(feature = "email")]
 pub mod email;
 #[cfg(feature = "oss")]
 pub mod oss;
-
-pub mod error;
 #[cfg(feature = "translate")]
 pub mod translate;

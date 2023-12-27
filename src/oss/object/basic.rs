@@ -5,8 +5,9 @@ use super::utils::get_local_file;
 use crate::error::Error;
 use crate::oss::object::utils::get_dest_path;
 use crate::oss::utils::get_content_md5;
-use crate::oss::utils::{into_header_map, now_gmt, sign_authorization};
+use crate::oss::utils::{into_header_map, sign_authorization};
 use crate::oss::OSSClient;
+use crate::utils::date::now_gmt;
 
 use reqwest::StatusCode;
 use std::collections::{BTreeMap, HashMap};

@@ -5,14 +5,6 @@ use std::collections::BTreeMap;
 
 use crate::error::Error;
 
-pub fn now_gmt() -> String {
-    use time::format_description::well_known::Rfc2822;
-    time::OffsetDateTime::now_utc()
-        .format(&Rfc2822)
-        .unwrap()
-        .replace("+0000", "GMT")
-}
-
 pub fn get_content_md5(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};
 

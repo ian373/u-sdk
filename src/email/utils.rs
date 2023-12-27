@@ -3,9 +3,6 @@ use hmac::{Hmac, Mac};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use sha1::Sha1;
 use std::collections::BTreeMap;
-use time::format_description::well_known::iso8601::{
-    Config, EncodedConfig, Iso8601, TimePrecision,
-};
 use url::form_urlencoded;
 
 // 定义一个函数，用于计算签名字符串
@@ -33,18 +30,6 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
     let res = mac.finalize().into_bytes();
 
     general_purpose::STANDARD.encode(res)
-}
-
-pub fn now_iso8601() -> String {
-    const ENCODED_CONFIG: EncodedConfig = Config::DEFAULT
-        .set_time_precision(TimePrecision::Second {
-            decimal_digits: None,
-        })
-        .encode();
-
-    time::OffsetDateTime::now_utc()
-        .format(&Iso8601::<ENCODED_CONFIG>)
-        .unwrap()
 }
 
 pub fn get_uuid() -> String {

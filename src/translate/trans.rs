@@ -1,11 +1,11 @@
-use super::open_api_sign::{get_common_headers, SignParams};
 use super::types_rs::*;
 use super::TransClient;
 use crate::error::Error;
 use crate::oss::utils::into_header_map;
-use std::collections::BTreeMap;
+use crate::utils::open_api_sign::{get_common_headers, SignParams};
 
 use reqwest::StatusCode;
+use std::collections::BTreeMap;
 
 /// > <a href="https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral" target="_blank">api文档地址</a>
 ///

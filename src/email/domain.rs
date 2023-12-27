@@ -2,9 +2,10 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use super::utils::{get_uuid, now_iso8601, sign_params};
+use super::utils::{get_uuid, sign_params};
 use super::{EmailSdk, BASE_URL};
 use crate::error::Error;
+use crate::utils::date::now_iso8601;
 
 #[derive(Serialize)]
 pub struct APIParams {

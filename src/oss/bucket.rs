@@ -1,8 +1,9 @@
 //! 只实现了小部分API
 
-use super::utils::{into_header_map, now_gmt, sign_authorization};
+use super::utils::{into_header_map, sign_authorization};
 use super::OSSClient;
 use crate::error::Error;
+use crate::utils::date::now_gmt;
 
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};

@@ -4,21 +4,10 @@ use std::collections::{BTreeMap, HashMap};
 use time::OffsetDateTime;
 use url::Url;
 
-use crate::email::utils::now_iso8601;
 use crate::error::Error;
+use crate::utils::date::now_iso8601;
 
 // 阿里云签名文档链接：https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
-
-// pub struct CommonRequestHeaders {
-//     pub x_acs_action: String,
-//     pub x_acs_version: String,
-//     pub authorization: String,
-//     pub x_acs_signature_nonce: String,
-//     pub x_acs_date: String,
-//     pub host: String,
-//     pub x_acs_content_sha256: String,
-//     pub x_acs_security_token: Option<String>,
-// }
 
 pub(crate) struct SignParams<'a> {
     pub req_method: &'a str,
