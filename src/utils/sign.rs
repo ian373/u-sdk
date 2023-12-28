@@ -1,9 +1,11 @@
 use base64::engine::{general_purpose, Engine};
 use hmac::{Hmac, Mac};
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use sha1::Sha1;
 use std::collections::BTreeMap;
 use url::form_urlencoded;
+
+// 签名文档：https://help.aliyun.com/document_detail/29442.html
 
 // 定义一个函数，用于计算签名字符串
 pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &str) -> String {
@@ -14,12 +16,14 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
         .replace('*', "%2A")
         .replace("%7E", "~");
 
-    // TODO 这里可以不需要使用[percent_encoding]这个crate，可以直接使用url，详情查看：crate::translate::open_api_sign
-    let percent_encode_string = utf8_percent_encode(&canonicalized_query_string, NON_ALPHANUMERIC)
-        .to_string()
-        .replace("%2D", "-")
-        .replace("%5F", "_")
-        .replace("%2E", ".");
+    // 下边四个字符不用编码，移出需要编码的字符集
+    const FRAGMENT: &AsciiSet = &NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'_')
+        .remove(b'.')
+        .remove(b'~');
+    let percent_encode_string =
+        percent_encode(canonicalized_query_string.as_bytes(), FRAGMENT).to_string();
 
     let string_to_sign = format!("{}&{}&{}", "POST", "%2F", percent_encode_string);
 
