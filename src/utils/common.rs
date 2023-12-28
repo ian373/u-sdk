@@ -25,3 +25,15 @@ pub fn now_iso8601() -> String {
         .format(&Iso8601::<ENCODED_CONFIG>)
         .unwrap()
 }
+
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use std::collections::HashMap;
+pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
+    map.iter()
+        .map(|(k, v)| {
+            let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+            let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+            (name, value)
+        })
+        .collect()
+}

@@ -1,7 +1,7 @@
 use super::OSSClient;
 use crate::error::Error;
-use crate::oss::utils::{into_header_map, sign_authorization};
-use crate::utils::common::now_gmt;
+use crate::oss::utils::sign_authorization;
+use crate::utils::common::{into_header_map, now_gmt};
 
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};

@@ -90,15 +90,3 @@ fn get_content_md5_test() {
     let s = get_content_md5(b"0123456789");
     assert_eq!(&s, "eB5eJF1ptWaXm4bijSPyxw==")
 }
-
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use std::collections::HashMap;
-pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
-    map.iter()
-        .map(|(k, v)| {
-            let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-            let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
-            (name, value)
-        })
-        .collect()
-}

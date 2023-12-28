@@ -1,7 +1,7 @@
 use super::types_rs::*;
 use super::TransClient;
 use crate::error::Error;
-use crate::oss::utils::into_header_map;
+use crate::utils::common::into_header_map;
 use crate::utils::open_api_sign::{get_common_headers, SignParams};
 
 use reqwest::StatusCode;
