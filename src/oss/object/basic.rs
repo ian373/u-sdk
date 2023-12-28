@@ -1,9 +1,8 @@
 //! 关于Object操作/基础操作
 
 use super::types_rs::*;
-use super::utils::get_local_file;
+use super::utils::{get_dest_path, get_local_file};
 use crate::error::Error;
-use crate::oss::object::utils::get_dest_path;
 use crate::oss::utils::{get_content_md5, sign_authorization};
 use crate::oss::OSSClient;
 use crate::utils::common::{into_header_map, now_gmt};
