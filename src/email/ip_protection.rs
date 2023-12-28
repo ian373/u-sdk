@@ -2,10 +2,11 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-use super::utils::{get_uuid, sign_params};
 use super::{EmailSdk, BASE_URL};
 use crate::error::Error;
+use crate::utils::common::get_uuid;
 use crate::utils::date::now_iso8601;
+use crate::utils::sign::sign_params;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]

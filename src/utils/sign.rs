@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose, Engine};
+use base64::engine::{general_purpose, Engine};
 use hmac::{Hmac, Mac};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use sha1::Sha1;
@@ -30,10 +30,6 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
     let res = mac.finalize().into_bytes();
 
     general_purpose::STANDARD.encode(res)
-}
-
-pub fn get_uuid() -> String {
-    uuid::Uuid::new_v4().to_string()
 }
 
 #[test]

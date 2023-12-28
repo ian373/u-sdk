@@ -1,7 +1,5 @@
 //! 邮件推送sdk
 
-pub(crate) mod utils;
-
 pub mod account;
 pub mod domain;
 pub mod ip_protection;
