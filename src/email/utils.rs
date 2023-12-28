@@ -1,9 +1,9 @@
-use crate::utils::common::sign_hmac_sha1;
-
 use base64::engine::{general_purpose, Engine};
 use percent_encoding::{percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use std::collections::BTreeMap;
 use url::form_urlencoded;
+
+use crate::utils::common::sign_hmac_sha1;
 
 // 签名文档：https://help.aliyun.com/document_detail/29442.html
 

@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use super::EmailSdk;
 use crate::email::send_email::SingleSendEmailParams;
+use crate::email::utils::sign_params;
 use crate::email::BASE_URL;
 use crate::utils::common::{get_uuid, now_iso8601};
-use crate::utils::sign::sign_params;
 
 impl EmailSdk {
     pub fn single_send_email(&self, api_params: &SingleSendEmailParams) {

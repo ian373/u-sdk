@@ -5,10 +5,11 @@ pub mod domain;
 pub mod ip_protection;
 pub mod send_email;
 
-use std::collections::BTreeMap;
+pub(crate) mod utils;
 
 pub(crate) const BASE_URL: &str = "https://dm.aliyuncs.com";
 
+use std::collections::BTreeMap;
 pub struct EmailSdk {
     // 公共参数固定不变的部分
     known_params: BTreeMap<String, String>,
