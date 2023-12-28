@@ -28,6 +28,7 @@ pub fn now_iso8601() -> String {
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
+
 pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
     map.iter()
         .map(|(k, v)| {
@@ -36,4 +37,13 @@ pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
             (name, value)
         })
         .collect()
+}
+
+use hmac::{Hmac, Mac};
+use sha1::Sha1;
+pub fn sign_hmac_sha1(secret: &str, str_to_sign: &str) -> Vec<u8> {
+    type HmacSha1 = Hmac<Sha1>;
+    let mut mac = HmacSha1::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(str_to_sign.as_bytes());
+    mac.finalize().into_bytes().to_vec()
 }

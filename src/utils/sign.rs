@@ -1,7 +1,7 @@
+use crate::utils::common::sign_hmac_sha1;
+
 use base64::engine::{general_purpose, Engine};
-use hmac::{Hmac, Mac};
 use percent_encoding::{percent_encode, AsciiSet, NON_ALPHANUMERIC};
-use sha1::Sha1;
 use std::collections::BTreeMap;
 use url::form_urlencoded;
 
@@ -27,12 +27,8 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
 
     let string_to_sign = format!("{}&{}&{}", "POST", "%2F", percent_encode_string);
 
-    type HmacSha1 = Hmac<Sha1>;
-    let mut mac =
-        HmacSha1::new_from_slice(format!("{}&", access_key_secret).as_bytes()).expect("error key");
-    mac.update(string_to_sign.as_bytes());
-    let res = mac.finalize().into_bytes();
-
+    let secret = format!("{}&", access_key_secret);
+    let res = sign_hmac_sha1(&secret, &string_to_sign);
     general_purpose::STANDARD.encode(res)
 }
 

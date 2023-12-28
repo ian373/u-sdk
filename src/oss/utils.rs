@@ -1,9 +1,8 @@
 use base64::{engine::general_purpose, Engine};
-use hmac::{Hmac, Mac};
-use sha1::Sha1;
 use std::collections::BTreeMap;
 
 use crate::error::Error;
+use crate::utils::common::sign_hmac_sha1;
 
 pub fn get_content_md5(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};
@@ -76,10 +75,7 @@ pub fn sign_authorization(
     );
     // println!("str_to_sign:{}", str_to_sign);
 
-    type HmacSha1 = Hmac<Sha1>;
-    let mut mac = HmacSha1::new_from_slice(access_key_secret.as_bytes()).unwrap();
-    mac.update(str_to_sign.as_bytes());
-    let res = mac.finalize().into_bytes();
+    let res = sign_hmac_sha1(access_key_secret, &str_to_sign);
     let signature = general_purpose::STANDARD.encode(res);
 
     format!("OSS {}:{}", access_key_id, signature)
