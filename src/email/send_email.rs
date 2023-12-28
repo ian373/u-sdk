@@ -4,8 +4,7 @@ use std::collections::BTreeMap;
 
 use super::{EmailSdk, BASE_URL};
 use crate::error::Error;
-use crate::utils::common::get_uuid;
-use crate::utils::date::now_iso8601;
+use crate::utils::common::{get_uuid, now_iso8601};
 use crate::utils::sign::sign_params;
 
 #[derive(Serialize, Deserialize)]

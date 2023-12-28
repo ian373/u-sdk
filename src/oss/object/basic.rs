@@ -7,7 +7,7 @@ use crate::oss::object::utils::get_dest_path;
 use crate::oss::utils::get_content_md5;
 use crate::oss::utils::{into_header_map, sign_authorization};
 use crate::oss::OSSClient;
-use crate::utils::date::now_gmt;
+use crate::utils::common::now_gmt;
 
 use reqwest::StatusCode;
 use std::collections::{BTreeMap, HashMap};

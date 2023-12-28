@@ -3,8 +3,7 @@ use std::collections::BTreeMap;
 use super::EmailSdk;
 use crate::email::send_email::SingleSendEmailParams;
 use crate::email::BASE_URL;
-use crate::utils::common::get_uuid;
-use crate::utils::date::now_iso8601;
+use crate::utils::common::{get_uuid, now_iso8601};
 use crate::utils::sign::sign_params;
 
 impl EmailSdk {

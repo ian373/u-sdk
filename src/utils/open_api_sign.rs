@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, HashMap};
 use time::OffsetDateTime;
 use url::Url;
 
+use super::common::now_iso8601;
 use crate::error::Error;
-use crate::utils::date::now_iso8601;
 
 // 阿里云签名文档链接：https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
 
