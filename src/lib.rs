@@ -28,8 +28,6 @@
 pub mod error;
 pub(crate) mod utils;
 
-#[cfg(feature = "blocking")]
-pub mod blocking;
 #[cfg(feature = "email")]
 pub mod email;
 #[cfg(feature = "oss")]
