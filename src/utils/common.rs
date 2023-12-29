@@ -1,14 +1,14 @@
-#[cfg(not(feature = "oss"))]
+#[cfg(any(feature = "translate", feature = "email"))]
 use time::format_description::well_known::iso8601::{
     Config, EncodedConfig, Iso8601, TimePrecision,
 };
 
-#[cfg(not(any(feature = "oss", feature = "translate")))]
+#[cfg(feature = "email")]
 pub fn get_uuid() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-#[cfg(not(any(feature = "email", feature = "translate")))]
+#[cfg(feature = "oss")]
 pub fn now_gmt() -> String {
     use time::format_description::well_known::Rfc2822;
     time::OffsetDateTime::now_utc()
@@ -17,7 +17,7 @@ pub fn now_gmt() -> String {
         .replace("+0000", "GMT")
 }
 
-#[cfg(not(feature = "oss"))]
+#[cfg(any(feature = "translate", feature = "email"))]
 pub fn now_iso8601() -> String {
     const ENCODED_CONFIG: EncodedConfig = Config::DEFAULT
         .set_time_precision(TimePrecision::Second {
@@ -30,12 +30,12 @@ pub fn now_iso8601() -> String {
         .unwrap()
 }
 
-#[cfg(not(feature = "email"))]
+#[cfg(any(feature = "oss", feature = "translate"))]
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-#[cfg(not(feature = "email"))]
+#[cfg(any(feature = "oss", feature = "translate"))]
 use std::collections::HashMap;
 
-#[cfg(not(feature = "email"))]
+#[cfg(any(feature = "oss", feature = "translate"))]
 pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
     map.iter()
         .map(|(k, v)| {
@@ -46,11 +46,11 @@ pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
         .collect()
 }
 
-#[cfg(not(feature = "translate"))]
+#[cfg(any(feature = "oss", feature = "email"))]
 use hmac::{Hmac, Mac};
-#[cfg(not(feature = "translate"))]
+#[cfg(any(feature = "oss", feature = "email"))]
 use sha1::Sha1;
-#[cfg(not(feature = "translate"))]
+#[cfg(any(feature = "oss", feature = "email"))]
 pub fn sign_hmac_sha1(secret: &str, str_to_sign: &str) -> Vec<u8> {
     type HmacSha1 = Hmac<Sha1>;
     let mut mac = HmacSha1::new_from_slice(secret.as_bytes()).unwrap();
