@@ -9,7 +9,7 @@ use crate::error::Error;
 
 // 阿里云签名文档链接：https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
 
-pub(crate) struct SignParams<'a> {
+pub struct SignParams<'a> {
     pub req_method: &'a str,
     pub host: &'a str,
     pub query_map: &'a BTreeMap<String, String>,
@@ -22,7 +22,7 @@ pub(crate) struct SignParams<'a> {
 
 // CanonicalURI
 // return: (CanonicalURI, 完整的url用于发送http请求, CanonicalQueryString)
-pub(crate) fn generate_can_uri(
+pub fn generate_can_uri(
     host: &str,
     query_map: &BTreeMap<String, String>,
 ) -> Result<(String, String, String), Error> {
@@ -42,7 +42,7 @@ pub(crate) fn generate_can_uri(
     Ok((can_uri, u.to_string(), can_query_str))
 }
 
-pub(crate) struct GenerateCanHeadersRes {
+pub struct GenerateCanHeadersRes {
     // CanonicalHeaders
     pub can_headers: String,
     // SignedHeaders
@@ -51,7 +51,7 @@ pub(crate) struct GenerateCanHeadersRes {
     pub common_headers: HashMap<String, String>,
 }
 // CanonicalizedHeaders
-pub(crate) fn generate_can_headers(
+pub fn generate_can_headers(
     x_header: Option<&BTreeMap<String, String>>,
     // 按照官方签名文档没提到要host，但是官方签名示例加了个host，所以这里也加个host
     host: &str,
@@ -103,7 +103,7 @@ pub(crate) fn generate_can_headers(
     }
 }
 
-pub(crate) fn hash_sha256(bytes: Option<&[u8]>) -> String {
+pub fn hash_sha256(bytes: Option<&[u8]>) -> String {
     let mut hasher = Sha256::new();
     if let Some(b) = bytes {
         hasher.update(b);
@@ -114,7 +114,7 @@ pub(crate) fn hash_sha256(bytes: Option<&[u8]>) -> String {
     hex::encode(hash_str)
 }
 
-pub(crate) fn sign_hmac_sha256(secret: &str, str_to_sign: &str) -> String {
+pub fn sign_hmac_sha256(secret: &str, str_to_sign: &str) -> String {
     type HmacSha256 = Hmac<Sha256>;
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
     mac.update(str_to_sign.as_bytes());
@@ -122,7 +122,7 @@ pub(crate) fn sign_hmac_sha256(secret: &str, str_to_sign: &str) -> String {
     hex::encode(res)
 }
 
-pub(crate) fn get_common_headers(
+pub fn get_common_headers(
     access_key_secret: &str,
     access_key_id: &str,
     sign_params: SignParams,
