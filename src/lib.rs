@@ -8,7 +8,6 @@
 //!
 //! # 说明
 //!
-//! - `blocking`为同步API，同步的API都在此模块下。
 //! - `error`模块包含所有错误类型，大部分错误类型直接来自使用的`crates`的`Error`。
 //! - 所有sdk均使用`https`进行请求，无法配置为`http`进行请求
 //! - 其它模块为对应sdk的异步实现
@@ -20,8 +19,6 @@
 //!
 //! # 注意
 //!
-//! - `blocking`模块暂时没有开发，等到异步API开发完成稳定后，将会删除该模块，更改为`email-sync`, `oss-sync`模块。
-//! - 理论上`blocking`API和异步API基本相同
 //! - 调用相应API时请注意你的RAM用户是否有相应得权限
 //!
 
@@ -34,3 +31,6 @@ pub mod email;
 pub mod oss;
 #[cfg(feature = "translate")]
 pub mod translate;
+
+#[cfg(feature = "server_chan")]
+pub mod server_chan;
