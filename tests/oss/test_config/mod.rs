@@ -1,4 +1,3 @@
-use config::Config;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -11,12 +10,8 @@ pub struct AliConfig {
 
 impl AliConfig {
     pub fn get_conf() -> Self {
-        let conf = Config::builder()
-            .add_source(config::File::with_name("tests/oss/test_config/config.toml"))
-            .build()
-            .unwrap()
-            .try_deserialize::<Self>()
-            .unwrap();
+        let file_str = std::fs::read_to_string("tests/oss/test_config/config.toml").unwrap();
+        let conf = toml::from_str(&file_str).unwrap();
 
         conf
     }
