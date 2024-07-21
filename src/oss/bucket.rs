@@ -260,10 +260,7 @@ impl OSSClient {
 
         let text = resp.text().await?;
         // println!("text: {}", text);
-        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
-            source: e,
-            origin_text: text,
-        })?;
+        let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
     }
@@ -306,10 +303,7 @@ impl OSSClient {
 
         let text = resp.text().await?;
         // println!("resp_text:\n{}", text);
-        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
-            source: e,
-            origin_text: text,
-        })?;
+        let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
     }
@@ -351,11 +345,7 @@ impl OSSClient {
         let resp = self.http_client.get(url).headers(header_map).send().await?;
 
         let text = resp.text().await?;
-        let res: LocationConstraint =
-            quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
-                source: e,
-                origin_text: text,
-            })?;
+        let res: LocationConstraint = quick_xml::de::from_str(&text)?;
         Ok(res.field)
     }
 
@@ -396,10 +386,7 @@ impl OSSClient {
         let resp = self.http_client.get(url).headers(header_map).send().await?;
 
         let text = resp.text().await?;
-        let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
-            source: e,
-            origin_text: text,
-        })?;
+        let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
     }
