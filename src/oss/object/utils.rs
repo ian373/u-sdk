@@ -4,19 +4,18 @@ pub fn get_local_file(file_path: &str) -> Result<(String, Vec<u8>), Error> {
     let p = std::path::Path::new(file_path);
     // 调用is_file，将检查本地磁盘是否存在该文件
     if !p.is_file() {
-        return Err(Error::CommonError(format!(
+        return Err(Error::AnyError(format!(
             "The file doesn't exist or not have permission to access, path: {}",
             file_path
         )));
     }
 
-    let bytes = std::fs::read(file_path).map_err(|_| {
-        Error::CommonError(format!("Faild to read the file with path: {}", file_path))
-    })?;
+    let bytes = std::fs::read(file_path)
+        .map_err(|_| Error::AnyError(format!("Faild to read the file with path: {}", file_path)))?;
 
     // pub object API限制文件大小不超过5G
     if bytes.len() > 5 * 1024 * 1024 {
-        return Err(Error::CommonError(
+        return Err(Error::AnyError(
             "Can't upload file which size is > 5G".to_owned(),
         ));
     }
@@ -43,9 +42,7 @@ fn get_local_file_test() {
 pub fn get_dest_path(path: &str, local_file_name: &str) -> Result<String, Error> {
     let mut dest_path = std::path::PathBuf::from(path);
     if !dest_path.has_root() {
-        return Err(Error::CommonError(
-            "Please input a absoulute path".to_owned(),
-        ));
+        return Err(Error::AnyError("Please input a absoulute path".to_owned()));
     }
 
     if path.ends_with('/') {

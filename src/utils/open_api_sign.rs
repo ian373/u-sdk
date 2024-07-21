@@ -27,7 +27,7 @@ pub fn generate_can_uri(
     query_map: &BTreeMap<String, String>,
 ) -> Result<(String, String, String), Error> {
     let u = Url::parse_with_params(&format!("https://{}", host), query_map)
-        .map_err(|_| Error::CommonError("url parsed failed!".to_owned()))?;
+        .map_err(|_| Error::AnyError("url parsed failed!".to_owned()))?;
     let can_uri = u.path().to_owned();
     let can_query_str;
     if let Some(s) = u.query() {

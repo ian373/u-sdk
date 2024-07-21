@@ -135,7 +135,7 @@ impl OSSClient {
 
         if c_header_is_empty {
             std::fs::write(dest_path, resp.bytes().await?)
-                .map_err(|e| Error::CommonError(format!("write data to disk error, {}", e)))?;
+                .map_err(|e| Error::AnyError(format!("write data to disk error, {}", e)))?;
             Ok(None)
         } else {
             let map: HashMap<String, String> = resp
@@ -144,7 +144,7 @@ impl OSSClient {
                 .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
                 .collect();
             std::fs::write(dest_path, resp.bytes().await?)
-                .map_err(|e| Error::CommonError(format!("write data to disk error, {}", e)))?;
+                .map_err(|e| Error::AnyError(format!("write data to disk error, {}", e)))?;
             Ok(Some(map))
         }
     }

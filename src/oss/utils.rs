@@ -38,7 +38,7 @@ fn get_canonicalized_resource(
         (Some(b), None) => format!("/{b}/"),
         (None, None) => "/".to_owned(),
         _ => {
-            return Err(Error::CommonError(
+            return Err(Error::AnyError(
                 "unknown type(get canonicalized)".to_owned(),
             ));
         }

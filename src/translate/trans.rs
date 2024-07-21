@@ -17,7 +17,7 @@ impl TransClient {
     /// 2. 字符长度上限是5000字符，
     pub async fn translate(&self, query: TranslateQuery) -> Result<TransResponseDataPart, Error> {
         if query.source_text.len() > 5000 {
-            return Err(Error::CommonError("字符长度上限是5000字符".to_owned()));
+            return Err(Error::AnyError("字符长度上限是5000字符".to_owned()));
         }
 
         let query_map = serde_json::from_value(serde_json::to_value(&query).unwrap()).unwrap();
@@ -49,7 +49,7 @@ impl TransClient {
 
         let res = resp.json::<TransRespCheckPart>().await?;
         if res.code != "200" || res.data.is_none() {
-            Err(Error::CommonError(format!(
+            Err(Error::AnyError(format!(
                 "msg:{}\ncode:{}",
                 res.message.unwrap_or("None".to_owned()),
                 res.code
@@ -61,7 +61,7 @@ impl TransClient {
 
     pub async fn get_detect_language(&self, source_text: &str) -> Result<String, Error> {
         if source_text.len() > 5000 {
-            return Err(Error::CommonError("字符长度上限是5000字符".to_owned()));
+            return Err(Error::AnyError("字符长度上限是5000字符".to_owned()));
         }
 
         let mut query_map = BTreeMap::new();
