@@ -4,7 +4,6 @@ use crate::error::Error;
 use crate::utils::common::into_header_map;
 use crate::utils::open_api_sign::{get_common_headers, SignParams};
 
-use reqwest::StatusCode;
 use std::collections::BTreeMap;
 
 /// > <a href="https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral" target="_blank">api文档地址</a>
@@ -47,9 +46,7 @@ impl TransClient {
             .headers(header_map)
             .send()
             .await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
+
         let res = resp.json::<TransRespCheckPart>().await?;
         if res.code != "200" || res.data.is_none() {
             Err(Error::CommonError(format!(
@@ -91,9 +88,7 @@ impl TransClient {
             .headers(header_map)
             .send()
             .await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
+
         let res = resp.json::<GetDetectLanguageResp>().await?;
 
         Ok(res.detected_language)

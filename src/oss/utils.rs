@@ -39,7 +39,7 @@ fn get_canonicalized_resource(
         (None, None) => "/".to_owned(),
         _ => {
             return Err(Error::CommonError(
-                "unknow type(get canonicalized)".to_owned(),
+                "unknown type(get canonicalized)".to_owned(),
             ));
         }
     };

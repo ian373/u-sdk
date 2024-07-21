@@ -7,7 +7,6 @@ use crate::oss::utils::{get_content_md5, sign_authorization};
 use crate::oss::OSSClient;
 use crate::utils::common::{into_header_map, now_gmt};
 
-use reqwest::StatusCode;
 use std::collections::{BTreeMap, HashMap};
 
 impl OSSClient {
@@ -86,10 +85,7 @@ impl OSSClient {
             .headers(header_map)
             .body(bytes);
         // println!("builder: {:#?}", builder);
-        let resp = builder.send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
+        builder.send().await?;
 
         Ok(())
     }
@@ -136,10 +132,6 @@ impl OSSClient {
             .get(format!("{}{}", self.bucket_url(), oss_path))
             .headers(header_map);
         let resp = builder.send().await?;
-        // println!("resp:{:#?}", resp);
-        if resp.status() != StatusCode::OK && resp.status() != StatusCode::PARTIAL_CONTENT {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         if c_header_is_empty {
             std::fs::write(dest_path, resp.bytes().await?)
@@ -208,9 +200,6 @@ impl OSSClient {
             .headers(header_map);
         // println!("builder: {:#?}", builder);
         let resp = builder.send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         let text = resp.text().await?;
         let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {
@@ -285,12 +274,8 @@ impl OSSClient {
             .post(format!("{}{}", self.bucket_url(), object_path))
             .headers(header_map)
             .body(bytes);
-        // println!("builder: {:#?}", builder);
         let resp = builder.send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
-        // println!("resp:{:#?}", resp);
+
         let resp_headers = resp.headers();
         // 下面直接使用unwrap()，默认不会出错，如果实际中出现错误，这里代码要优化
         let next_pos: u64 = resp_headers
@@ -335,10 +320,7 @@ impl OSSClient {
             .http_client
             .delete(format!("{}{}", self.bucket_url(), oss_path))
             .headers(header_map);
-        let resp = builder.send().await?;
-        if resp.status() != StatusCode::NON_AUTHORITATIVE_INFORMATION {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
+        builder.send().await?;
 
         Ok(())
     }
@@ -393,9 +375,6 @@ impl OSSClient {
             .headers(header_map)
             .body(req_body);
         let resp = builder.send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         if quiet_resp {
             return Ok(None);
@@ -439,9 +418,6 @@ impl OSSClient {
             .head(format!("{}{}", self.bucket_url(), oss_path))
             .headers(header_map);
         let resp = builder.send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
         let response_header: HashMap<String, String> = resp
             .headers()
             .iter()
@@ -475,9 +451,6 @@ impl OSSClient {
             .head(format!("{}{}?objectMeta", self.bucket_url(), oss_path))
             .headers(header_map);
         let resp = builder.send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
         let response_header: HashMap<String, String> = resp
             .headers()
             .iter()

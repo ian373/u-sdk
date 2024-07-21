@@ -5,7 +5,6 @@ use super::OSSClient;
 use crate::error::Error;
 use crate::utils::common::{into_header_map, now_gmt};
 
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use url::Url;
@@ -219,17 +218,12 @@ impl OSSClient {
         // 理论上当params两个属性值都为None时应该rq_xml应该为""，但是此时解析结果为：<CreateBucketConfiguration/>也不影响请求
         let rq_xml = quick_xml::se::to_string(&params).unwrap();
         // println!("rq_xml: {}", rq_xml);
-        let resp = self
-            .http_client
+        self.http_client
             .put(format!("https://{}.{}", bucket_name, endpoint))
             .headers(header_map)
             .body(rq_xml)
             .send()
             .await?;
-
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         Ok(())
     }
@@ -263,9 +257,6 @@ impl OSSClient {
         let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         let text = resp.text().await?;
         // println!("text: {}", text);
@@ -312,9 +303,6 @@ impl OSSClient {
         let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         let text = resp.text().await?;
         // println!("resp_text:\n{}", text);
@@ -361,9 +349,6 @@ impl OSSClient {
         let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         let text = resp.text().await?;
         let res: LocationConstraint =
@@ -409,9 +394,6 @@ impl OSSClient {
         let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         let text = resp.text().await?;
         let res = quick_xml::de::from_str(&text).map_err(|e| Error::XMLDeError {

@@ -9,7 +9,7 @@ use crate::utils::common::sign_hmac_sha1;
 
 // 定义一个函数，用于计算签名字符串
 pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &str) -> String {
-    let canonicalized_query_string = form_urlencoded::Serializer::new(String::new())
+    let canonical_query_string = form_urlencoded::Serializer::new(String::new())
         .extend_pairs(query_params)
         .finish()
         .replace('+', "%20")
@@ -23,7 +23,7 @@ pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &
         .remove(b'.')
         .remove(b'~');
     let percent_encode_string =
-        percent_encode(canonicalized_query_string.as_bytes(), FRAGMENT).to_string();
+        percent_encode(canonical_query_string.as_bytes(), FRAGMENT).to_string();
 
     let string_to_sign = format!("{}&{}&{}", "POST", "%2F", percent_encode_string);
 

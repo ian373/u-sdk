@@ -3,7 +3,6 @@ use super::OSSClient;
 use crate::error::Error;
 use crate::utils::common::{into_header_map, now_gmt};
 
-use reqwest::StatusCode;
 use serde::Deserialize;
 use url::Url;
 
@@ -51,9 +50,6 @@ impl OSSClient {
         let header_map = into_header_map(common_header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
-        if resp.status() != StatusCode::OK {
-            return Err(Error::StatusCodeNot200Resp(resp));
-        }
 
         let text = resp.text().await?;
 

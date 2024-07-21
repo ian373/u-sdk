@@ -1,4 +1,3 @@
-use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -33,10 +32,6 @@ impl EmailSdk {
             .send()
             .await?;
 
-        if resp.status() == StatusCode::OK {
-            Ok(resp.json::<GetIpProtectionResult>().await.unwrap())
-        } else {
-            Err(Error::StatusCodeNot200Resp(resp))
-        }
+        Ok(resp.json::<GetIpProtectionResult>().await?)
     }
 }

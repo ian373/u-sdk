@@ -104,7 +104,7 @@ pub struct CopyObjectResult {
 #[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct AppendObjectCHeader<'a> {
-    // contet_md5, position将根据函数自动添加
+    // content_md5, position将根据函数自动添加
     pub cache_control: Option<&'a str>,
     pub content_disposition: Option<&'a str>,
     pub content_encoding: Option<&'a str>,

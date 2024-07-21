@@ -37,7 +37,7 @@ async fn single_send_email() {
             Error::StatusCodeNot200Resp(faild_resp) => {
                 println!("faild! response text: {}", faild_resp.text().await.unwrap());
             }
-            Error::ReqwestError(e) => {
+            Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
             _ => println!("error: {}", e),
@@ -58,7 +58,7 @@ async fn desc_account_summary_test() {
             Error::StatusCodeNot200Resp(faild_resp) => {
                 println!("faild! response text: {}", faild_resp.text().await.unwrap());
             }
-            Error::ReqwestError(e) => {
+            Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
             _ => println!("error: {}", e),
@@ -86,7 +86,7 @@ async fn query_domain_by_param_test() {
             Error::StatusCodeNot200Resp(faild_resp) => {
                 println!("faild! response text: {}", faild_resp.text().await.unwrap());
             }
-            Error::ReqwestError(e) => {
+            Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
             _ => println!("error: {}", e),
@@ -107,7 +107,7 @@ async fn get_ip_protection_test() {
             Error::StatusCodeNot200Resp(faild_resp) => {
                 println!("faild! response text: {}", faild_resp.text().await.unwrap());
             }
-            Error::ReqwestError(e) => {
+            Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
             _ => println!("error: {}", e),
