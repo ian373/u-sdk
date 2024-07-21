@@ -34,9 +34,6 @@ async fn single_send_email() {
             println!("ok: {:?}", data);
         }
         Err(e) => match e {
-            Error::StatusCodeNot200Resp(faild_resp) => {
-                println!("faild! response text: {}", faild_resp.text().await.unwrap());
-            }
             Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
@@ -55,9 +52,6 @@ async fn desc_account_summary_test() {
             println!("ok: {:?}", data);
         }
         Err(e) => match e {
-            Error::StatusCodeNot200Resp(faild_resp) => {
-                println!("faild! response text: {}", faild_resp.text().await.unwrap());
-            }
             Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
@@ -83,9 +77,6 @@ async fn query_domain_by_param_test() {
             println!("ok: {:?}", data);
         }
         Err(e) => match e {
-            Error::StatusCodeNot200Resp(faild_resp) => {
-                println!("faild! response text: {}", faild_resp.text().await.unwrap());
-            }
             Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }
@@ -104,9 +95,6 @@ async fn get_ip_protection_test() {
             println!("ok: {:?}", data);
         }
         Err(e) => match e {
-            Error::StatusCodeNot200Resp(faild_resp) => {
-                println!("faild! response text: {}", faild_resp.text().await.unwrap());
-            }
             Error::RequestFailed(e) => {
                 println!("error: {:?}", e);
             }

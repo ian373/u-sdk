@@ -1,7 +1,6 @@
 mod test_config;
 
 use oss::object::types_rs::*;
-use u_ali_sdk::error::Error;
 use u_ali_sdk::oss;
 
 fn get_oss_client() -> oss::OSSClient {
@@ -82,10 +81,7 @@ async fn list_objects_v2_test() {
 
     match res {
         Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("error: {}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -97,10 +93,7 @@ async fn get_bucket_info_test() {
 
     match res {
         Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -112,10 +105,7 @@ async fn get_bucket_location_test() {
 
     match res {
         Ok(s) => println!("res:\n {}", s),
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -127,10 +117,7 @@ async fn get_bucket_stat_test() {
 
     match res {
         Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -161,10 +148,7 @@ async fn put_object_test() {
 
     match res {
         Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -189,10 +173,7 @@ async fn get_object_test() {
                 println!("ok!");
             }
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(_e) => println!("error: {:?}", _e),
     }
 }
 
@@ -219,10 +200,7 @@ async fn copy_object_test() {
         Ok(r) => {
             println!("res:{:#?}", r);
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -249,10 +227,7 @@ async fn append_object_test() {
         Ok(s) => {
             println!("OK: {:#?}", s);
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -266,10 +241,7 @@ async fn delete_object_test() {
         Ok(_) => {
             println!("OK!");
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -294,10 +266,7 @@ async fn delete_multiple_objects_test() {
         Ok(s) => {
             println!("ok_res:{:#?}", s);
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => println!("text: {}", resp.text().await.unwrap()),
-            _ => println!("{}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -313,12 +282,7 @@ async fn head_object_test() {
         Ok(s) => {
             println!("ok_res:{:#?}", s);
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => {
-                println!("error_text: {}", resp.text().await.unwrap())
-            }
-            _ => println!("other_e: {}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
 
@@ -332,11 +296,6 @@ async fn get_object_meta_test() {
         Ok(s) => {
             println!("ok_res:{:#?}", s);
         }
-        Err(e) => match e {
-            Error::StatusCodeNot200Resp(resp) => {
-                println!("error_text: {}", resp.text().await.unwrap())
-            }
-            _ => println!("other_e: {}", e),
-        },
+        Err(e) => println!("error: {:?}", e),
     }
 }
