@@ -8,7 +8,6 @@ edition = "2021"
 [features]
 email = []
 oss = ["dep:quick-xml"]
-#blocking = ["reqwest/blocking"]
 # 机器翻译
 translate = []
 
