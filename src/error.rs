@@ -15,4 +15,7 @@ pub enum Error {
     /// 一般性错误
     #[error("common error: {0}")]
     AnyError(String),
+    // 请求api不是2xx是返回的错误
+    #[error("request api failed, status_code: {status}, text: {text}")]
+    RequestAPIFailed { status: String, text: String },
 }

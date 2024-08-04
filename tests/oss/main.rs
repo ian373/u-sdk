@@ -9,6 +9,7 @@ fn get_oss_client() -> oss::OSSClient {
         conf.access_key_id,
         conf.access_key_secret,
         conf.endpoint,
+        conf.region,
         conf.bucket_name,
     )
 }
@@ -88,12 +89,11 @@ async fn list_objects_v2_test() {
 #[tokio::test]
 async fn get_bucket_info_test() {
     let client = get_oss_client();
-
-    let res = client.get_bucket_info(Some("example-oss-todel")).await;
+    let res = client.get_bucket_info().await;
 
     match res {
         Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => println!("error: {:?}", e),
+        Err(e) => println!("error: {:#?}", e),
     }
 }
 

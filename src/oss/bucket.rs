@@ -1,12 +1,13 @@
 //! 只实现了小部分API
 
-use super::utils::sign_authorization;
+use super::utils::{into_request_header, sign_authorization};
 use super::OSSClient;
 use crate::error::Error;
-use crate::utils::common::{into_header_map, now_gmt};
+use crate::oss::sign_v4::{sign_v4, HTTPVerb};
+use crate::utils::common::{gmt_format, into_header_map, now_gmt};
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use url::Url;
 
 // region:    --- put bucket
@@ -265,44 +266,53 @@ impl OSSClient {
         Ok(res)
     }
 
-    /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
-    pub async fn get_bucket_info(&self, other_bucket: Option<&str>) -> Result<BucketInfo, Error> {
-        let now_gmt = now_gmt();
-        let bucket_name = if let Some(b) = other_bucket {
-            b
-        } else {
-            &self.bucket
-        };
+    /// - `bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取指定的`bucket`的信息
+    pub async fn get_bucket_info(&self) -> Result<BucketInfo, Error> {
         let url = Url::parse_with_params(
-            &format!("https://{}.{}", bucket_name, self.endpoint),
+            &format!("https://{0}.{1}/{0}/", self.bucket, self.endpoint),
             [("bucketInfo", "")],
         )
         .unwrap();
-        let authorization = sign_authorization(
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", url.host_str().unwrap());
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let auth = sign_v4(
+            &self.region,
+            HTTPVerb::Get,
+            &url,
+            &canonical_header,
+            Some(&additional_header),
             &self.access_key_id,
             &self.access_key_secret,
-            "GET",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(bucket_name),
-            // 你可以认为，这个请求其实是请求bucket的一个特殊object
-            Some("?bucketInfo"),
+            &now,
         );
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &auth);
+        let gmt = gmt_format(now);
+        header.insert("Date", &gmt);
 
-        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        common_header.insert(
-            "Host".to_owned(),
-            format!("{}.{}", bucket_name, self.endpoint),
-        );
+        let header_map = into_request_header(header);
 
-        let header_map = into_header_map(common_header);
+        let resp = self
+            .http_client
+            .get(format!(
+                "https://{}.{}/?bucketInfo",
+                self.bucket, self.endpoint
+            ))
+            .headers(header_map)
+            .send()
+            .await?;
 
-        let resp = self.http_client.get(url).headers(header_map).send().await?;
-
+        if !resp.status().is_success() {
+            return Err(Error::RequestAPIFailed {
+                status: resp.status().to_string(),
+                text: resp.text().await?,
+            });
+        }
         let text = resp.text().await?;
-        // println!("resp_text:\n{}", text);
         let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)

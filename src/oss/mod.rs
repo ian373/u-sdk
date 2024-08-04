@@ -7,12 +7,14 @@ pub mod object;
 pub mod region;
 pub mod service;
 
+pub(crate) mod sign_v4;
 pub(crate) mod utils;
 
 pub struct OSSClient {
     access_key_id: String,
     access_key_secret: String,
     endpoint: String,
+    region: String,
     bucket: String,
     http_client: reqwest::Client,
 }
@@ -22,14 +24,33 @@ impl OSSClient {
         access_key_id: String,
         access_key_secret: String,
         endpoint: String,
+        region: String,
         bucket: String,
     ) -> Self {
         OSSClient {
             access_key_id,
             access_key_secret,
             endpoint,
+            region,
             bucket,
             http_client: reqwest::Client::new(),
+        }
+    }
+
+    pub fn set_bucket_info(
+        &mut self,
+        bucket: Option<&str>,
+        region: Option<&str>,
+        endpoint: Option<&str>,
+    ) {
+        if let Some(s) = bucket {
+            s.clone_into(&mut self.bucket);
+        }
+        if let Some(s) = region {
+            s.clone_into(&mut self.region);
+        }
+        if let Some(s) = endpoint {
+            s.clone_into(&mut self.endpoint);
         }
     }
 

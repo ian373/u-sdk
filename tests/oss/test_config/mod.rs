@@ -6,6 +6,7 @@ pub struct AliConfig {
     pub access_key_secret: String,
     pub endpoint: String,
     pub bucket_name: String,
+    pub region: String,
 }
 
 impl AliConfig {

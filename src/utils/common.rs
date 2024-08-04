@@ -11,10 +11,16 @@ pub fn get_uuid() -> String {
 #[cfg(feature = "oss")]
 pub fn now_gmt() -> String {
     use time::format_description::well_known::Rfc2822;
-    time::OffsetDateTime::now_utc()
+    OffsetDateTime::now_utc()
         .format(&Rfc2822)
         .unwrap()
         .replace("+0000", "GMT")
+}
+
+#[cfg(feature = "oss")]
+pub fn gmt_format(date_time: OffsetDateTime) -> String {
+    use time::format_description::well_known::Rfc2822;
+    date_time.format(&Rfc2822).unwrap().replace("+0000", "GMT")
 }
 
 #[cfg(any(feature = "translate", feature = "email"))]
@@ -25,7 +31,7 @@ pub fn now_iso8601() -> String {
         })
         .encode();
 
-    time::OffsetDateTime::now_utc()
+    OffsetDateTime::now_utc()
         .format(&Iso8601::<ENCODED_CONFIG>)
         .unwrap()
 }
@@ -50,6 +56,9 @@ pub fn into_header_map(map: HashMap<String, String>) -> HeaderMap {
 use hmac::{Hmac, Mac};
 #[cfg(any(feature = "oss", feature = "email"))]
 use sha1::Sha1;
+#[cfg(any(feature = "oss", feature = "email"))]
+use time::OffsetDateTime;
+
 #[cfg(any(feature = "oss", feature = "email"))]
 pub fn sign_hmac_sha1(secret: &str, str_to_sign: &str) -> Vec<u8> {
     type HmacSha1 = Hmac<Sha1>;

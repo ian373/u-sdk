@@ -1,8 +1,8 @@
-use base64::{engine::general_purpose, Engine};
-use std::collections::BTreeMap;
-
 use crate::error::Error;
 use crate::utils::common::sign_hmac_sha1;
+use base64::{engine::general_purpose, Engine};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use std::collections::{BTreeMap, HashMap};
 
 pub fn get_content_md5(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};
@@ -58,7 +58,7 @@ pub fn sign_authorization(
     bucket_name: Option<&str>,
     object_name: Option<&str>,
 ) -> String {
-    let content_md5 = if let Some(s) = content_md5 { s } else { "" };
+    let content_md5 = content_md5.unwrap_or_default();
 
     let canonicalized_oss_headers = if oss_header_map.is_some() {
         get_canonicalized_oss_header(oss_header_map)
@@ -67,7 +67,7 @@ pub fn sign_authorization(
     };
     let canonicalized_resource = get_canonicalized_resource(bucket_name, object_name).unwrap();
 
-    let content_type = if let Some(s) = content_type { s } else { "" };
+    let content_type = content_type.unwrap_or_default();
 
     let str_to_sign = format!(
         "{}\n{}\n{}\n{}\n{}{}",
@@ -85,4 +85,13 @@ pub fn sign_authorization(
 fn get_content_md5_test() {
     let s = get_content_md5(b"0123456789");
     assert_eq!(&s, "eB5eJF1ptWaXm4bijSPyxw==")
+}
+pub(crate) fn into_request_header(map: HashMap<&str, &str>) -> HeaderMap {
+    map.into_iter()
+        .map(|(k, v)| {
+            let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+            let value = HeaderValue::from_bytes(v.as_bytes()).unwrap();
+            (name, value)
+        })
+        .collect()
 }

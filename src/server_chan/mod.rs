@@ -28,7 +28,7 @@ where
     }
 
     pub async fn send_msg(&self, params: SendParams<'b>) -> Result<(), Error> {
-        if params.title.len() < 1 {
+        if params.title.is_empty() {
             return Err(Error::AnyError("title can't be empty.".to_string()));
         }
 
