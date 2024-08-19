@@ -1,4 +1,6 @@
 //! 只实现了小部分API
+//!
+//! [阿里云API文档](https://help.aliyun.com/zh/oss/developer-reference/bucket-operations/)
 
 use super::utils::{into_request_header, sign_authorization};
 use super::OSSClient;

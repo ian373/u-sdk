@@ -1,5 +1,13 @@
 //! oss sdk
+//!
 //! 阿里云oss文档：https://help.aliyun.com/zh/oss/
+//!
+//! 注意：
+//!
+//! - 所有的api暂时无法使用STS方式（需要添加`x-oss-security-token`）
+//! - 所有api目前只能使用Header携带签名的方式请求，暂不支持url参数签名
+
+// 所有api的请求逻辑和操作都基本相同，具体逻辑或步骤可参考service.rs的注释理解
 
 use std::collections::HashMap;
 

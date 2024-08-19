@@ -32,12 +32,10 @@ async fn list_buckets_test() {
 #[tokio::test]
 async fn describe_regions_test() {
     let client = get_oss_client();
-
-    let res = client.describe_regions(Some("oss-cn-hangzhou")).await;
-
+    let res = client.describe_regions(Some("oss-ap-northeast-1")).await;
     match res {
-        Ok(s) => println!("res:\n{:?}", s),
-        Err(e) => println!("{:?}", e),
+        Ok(s) => println!("res:\n{:#?}", s),
+        Err(e) => println!("{:#?}", e),
     }
 }
 

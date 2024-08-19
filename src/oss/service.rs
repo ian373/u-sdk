@@ -99,7 +99,9 @@ impl OSSClient {
         let url = Url::parse_with_params(&format!("https://{}", self.endpoint), query_map).unwrap();
         // 构建canonical_header，canonical_header包含了公共请求头的部分内容
         let mut canonical_header = BTreeMap::new();
+        // x-oss-content-sha256是必须存在且值固定
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        // host为addition_header中指定的需要额外添加到签名计算中的参数
         canonical_header.insert("host", url.host_str().unwrap());
         if let Some(s) = x_oss_resource_group_id {
             canonical_header.insert("x-oss-resource-group-id", s);

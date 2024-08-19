@@ -107,6 +107,7 @@ fn sign_hmac_sha256_byte(secret: &[u8], str_to_sign: &[u8]) -> Vec<u8> {
 
 /// verb: GET, PUT, POST, DELETE...
 /// uri like: "/", "/bucket/", "/bucket/object"; query: "xxx?xxx=xxx&xxx=xxx"
+// 关于签名所必须的参数参考顶部签名文档，如canonical_header, additional_header等
 pub(crate) fn sign_v4(
     signing_region: &str,
     http_verb: HTTPVerb,
