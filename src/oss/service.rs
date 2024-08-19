@@ -86,6 +86,7 @@ impl OSSClient {
         x_oss_resource_group_id: Option<&str>,
         query_params: Option<ListBucketsQueryParams<'_>>,
     ) -> Result<ListAllMyBucketsResult, Error> {
+        // 构建url的query部分，用于传递url以便签名构建canonical_query_string
         let query_map = if let Some(query_params) = query_params {
             query_params.into_hashmap()
         } else {
@@ -93,18 +94,21 @@ impl OSSClient {
         };
         // println!("query_map: {:?}", query_map);
 
+        // 构建url用于签名使用
         // 此api不涉及bucket，url使用https://endpoint
         let url = Url::parse_with_params(&format!("https://{}", self.endpoint), query_map).unwrap();
+        // 构建canonical_header，canonical_header包含了公共请求头的部分内容
         let mut canonical_header = BTreeMap::new();
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
         canonical_header.insert("host", url.host_str().unwrap());
         if let Some(s) = x_oss_resource_group_id {
             canonical_header.insert("x-oss-resource-group-id", s);
         }
+        // 添加host到additional_header，因为canonical_header中把host也参与签名计算了
         let mut additional_header = BTreeSet::new();
         additional_header.insert("host");
         let now = time::OffsetDateTime::now_utc();
-        let auth = sign_v4(
+        let authorization = sign_v4(
             &self.region,
             HTTPVerb::Get,
             &url,
@@ -114,14 +118,14 @@ impl OSSClient {
             &self.access_key_secret,
             &now,
         );
+        // 把canonical_header转换为HashMap，用于构建请求头，添加剩余的必须的公共请求头
         let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &auth);
+        header.insert("Authorization", &authorization);
         let gmt = gmt_format(now);
         header.insert("Date", &gmt);
         let header_map = into_request_header(header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
-
         let text = resp.text().await?;
         // println!("text: {}", text);
         let res = quick_xml::de::from_str(&text)?;
