@@ -14,26 +14,26 @@ server_chan = []
 
 [dependencies]
 # 签名相关
-url = "2.4.0"
-percent-encoding = "2.3.0"
+url = "2.5.2"
+percent-encoding = "2.3.1"
 hmac = "0.12.1"
-sha1 = "0.10.5"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
-base64 = "0.21.2"
+base64 = "0.22.1"
 hex = "0.4.3"
-md-5 = "0.10.5"
+md-5 = "0.10.6"
 
-reqwest = { version = "0.11.18", features = ["json"] }
-serde = { version = "1.0.181", features = ["derive"] }
-serde_json = "1.0.104"
-serde_with = "3.3.0"
-thiserror = "1.0.44"
-time = { version = "0.3.25", features = ["formatting"] }
-uuid = { version = "1.4.1", features = ["v4"] }
-quick-xml = { version = "0.30.0", features = ["serialize"], optional = true }
+reqwest = { version = "0.12.5", features = ["json"] }
+serde = { version = "1.0.208", features = ["derive"] }
+serde_json = "1.0.125"
+serde_with = "3.9.0"
+thiserror = "1.0.63"
+time = { version = "0.3.36", features = ["formatting"] }
+uuid = { version = "1.10.0", features = ["v4"] }
+quick-xml = { version = "0.36.1", features = ["serialize"], optional = true }
 
-mime_guess = "2.0.4"
+mime_guess = "2.0.5"
 
 [dev-dependencies]
-tokio = { version = "1.30.0", features = ["full"] }
-toml = "0.8.15"
+tokio = { version = "1.39.3", features = ["full"] }
+toml = "0.8.19"
