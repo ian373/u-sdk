@@ -1,22 +1,40 @@
-use super::utils::sign_authorization;
+use super::utils::into_request_header;
 use super::OSSClient;
 use crate::error::Error;
-use crate::utils::common::{into_header_map, now_gmt};
+use crate::oss::sign_v4::{sign_v4, HTTPVerb};
+use crate::utils::common::gmt_format;
 
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use url::Url;
 
+//region ListBucketsQueryParams
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ListBucketsQueryParams<'a> {
     pub prefix: Option<&'a str>,
     pub marker: Option<&'a str>,
-    // TODO 这里可以改为Option<u16>，,1~1000，因为max_keys输入的时候是必是数字，
-    // 这样写更不容易出错，但这要就需要解决类型问题，因为这个结构体需要序列化，类型必须同一，想办法解决
-    pub max_keys: Option<&'a str>,
+    #[serde(serialize_with = "serialize_option_u16_as_string")]
+    pub max_keys: Option<u16>,
 }
+fn serialize_option_u16_as_string<S>(value: &Option<u16>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(v) => serializer.serialize_some(&v.to_string()),
+        None => serializer.serialize_none(),
+    }
+}
+
+impl ListBucketsQueryParams<'_> {
+    pub(crate) fn into_hashmap(self) -> HashMap<String, String> {
+        serde_json::from_value::<HashMap<String, String>>(serde_json::to_value(self).unwrap())
+            .unwrap()
+    }
+}
+//endregion
 
 // region:    --- ListBucketResult
 /// 如果属性值为`None`，如：`prefix: None`，表示返回的xml中没有该标签`<Prefix/>`。
@@ -43,7 +61,7 @@ pub struct Owner {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct Buckets {
-    pub bucket: Vec<Bucket>,
+    pub bucket: Option<Vec<Bucket>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -66,50 +84,46 @@ impl OSSClient {
     pub async fn list_buckets(
         &self,
         x_oss_resource_group_id: Option<&str>,
-        query_params: ListBucketsQueryParams<'_>,
+        query_params: Option<ListBucketsQueryParams<'_>>,
     ) -> Result<ListAllMyBucketsResult, Error> {
-        let query_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(query_params).unwrap()).unwrap();
+        let query_map = if let Some(query_params) = query_params {
+            query_params.into_hashmap()
+        } else {
+            HashMap::with_capacity(0)
+        };
+        // println!("query_map: {:?}", query_map);
 
         // 此api不涉及bucket，url使用https://endpoint
-        let url = Url::parse_with_params(&self.endpoint_url(), query_map).unwrap();
-
-        let mut oss_header_map = BTreeMap::new();
+        let url = Url::parse_with_params(&format!("https://{}", self.endpoint), query_map).unwrap();
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", url.host_str().unwrap());
         if let Some(s) = x_oss_resource_group_id {
-            oss_header_map.insert("x-oss-resource-group-id".to_owned(), s.to_owned());
+            canonical_header.insert("x-oss-resource-group-id", s);
         }
-
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let auth = sign_v4(
+            &self.region,
+            HTTPVerb::Get,
+            &url,
+            &canonical_header,
+            Some(&additional_header),
             &self.access_key_id,
             &self.access_key_secret,
-            "GET",
-            None,
-            None,
-            &now_gmt,
-            Some(&oss_header_map),
-            None,
-            None,
+            &now,
         );
-
-        let mut header_map = HashMap::new();
-        header_map.extend(oss_header_map);
-
-        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        // 注意，这里需要改一下Host的值，默认情况下Host的值为`bucket.endpoint`，但此api不涉及bucket，host的值位应为`endpoint`
-        common_header.insert("Host".to_owned(), self.endpoint.clone());
-
-        header_map.extend(common_header);
-
-        // 把HashMap转化为reqwest需要的HeaderMap
-        let header_map = into_header_map(header_map);
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &auth);
+        let gmt = gmt_format(now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
 
         let resp = self.http_client.get(url).headers(header_map).send().await?;
 
         let text = resp.text().await?;
-
-        // println!("resp_text:\n{}", resp_text);
-
+        // println!("text: {}", text);
         let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)

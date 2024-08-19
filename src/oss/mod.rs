@@ -21,18 +21,18 @@ pub struct OSSClient {
 
 impl OSSClient {
     pub fn new(
-        access_key_id: String,
-        access_key_secret: String,
-        endpoint: String,
-        region: String,
-        bucket: String,
+        access_key_id: &str,
+        access_key_secret: &str,
+        endpoint: &str,
+        region: &str,
+        bucket: &str,
     ) -> Self {
         OSSClient {
-            access_key_id,
-            access_key_secret,
-            endpoint,
-            region,
-            bucket,
+            access_key_id: access_key_id.to_owned(),
+            access_key_secret: access_key_secret.to_owned(),
+            endpoint: endpoint.to_owned(),
+            region: region.to_owned(),
+            bucket: bucket.to_owned(),
             http_client: reqwest::Client::new(),
         }
     }
@@ -56,10 +56,6 @@ impl OSSClient {
 
     fn bucket_url(&self) -> String {
         format!("https://{}.{}", self.bucket, self.endpoint)
-    }
-
-    fn endpoint_url(&self) -> String {
-        format!("https://{}", self.endpoint)
     }
 
     fn get_common_header_map(

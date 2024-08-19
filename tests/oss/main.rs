@@ -6,11 +6,11 @@ use u_ali_sdk::oss;
 fn get_oss_client() -> oss::OSSClient {
     let conf = test_config::AliConfig::get_conf();
     oss::OSSClient::new(
-        conf.access_key_id,
-        conf.access_key_secret,
-        conf.endpoint,
-        conf.region,
-        conf.bucket_name,
+        &conf.access_key_id,
+        &conf.access_key_secret,
+        &conf.endpoint,
+        &conf.region,
+        &conf.bucket_name,
     )
 }
 
@@ -18,11 +18,14 @@ fn get_oss_client() -> oss::OSSClient {
 async fn list_buckets_test() {
     let client = get_oss_client();
 
-    let query = oss::service::ListBucketsQueryParams::default();
-    let res = client.list_buckets(None, query).await;
+    let query = oss::service::ListBucketsQueryParams {
+        prefix: Some("test"),
+        ..Default::default()
+    };
+    let res = client.list_buckets(None, Some(query)).await;
     match res {
-        Ok(s) => println!("res:\n{:?}", s),
-        Err(e) => println!("{:?}", e),
+        Ok(s) => println!("res:\n{:#?}", s),
+        Err(e) => println!("{:#?}", e),
     }
 }
 

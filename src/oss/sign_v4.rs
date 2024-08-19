@@ -35,6 +35,8 @@ fn get_canonical_request(
         .replace("%2F", "/");
     let canonical_query_string = uri
         .query_pairs()
+        .collect::<BTreeMap<_, _>>()
+        .iter()
         .map(|(k, v)| {
             if v.is_empty() {
                 k.to_string()
@@ -59,7 +61,7 @@ fn get_canonical_request(
         "".to_owned()
     };
 
-    format!(
+    let res = format!(
         "{}\n{}\n{}\n{}\n{}\n{}",
         http_verb,
         canonical_uri,
@@ -67,8 +69,10 @@ fn get_canonical_request(
         canonical_headers_str,
         additional_header_str,
         "UNSIGNED-PAYLOAD"
-    )
-    // println!("canonical_request: {}", res);
+    );
+
+    // println!("canonical_request:===========\n{}\n===========", res);
+    res
 }
 
 fn string_to_sign(
@@ -86,10 +90,12 @@ fn string_to_sign(
     let mut hasher = Sha256::new();
     hasher.update(canonical_request_str.as_bytes());
     let hex_canonical_request = hex::encode(hasher.finalize());
-    format!(
+    let res = format!(
         "OSS4-HMAC-SHA256\n{}\n{}\n{}",
         timestamp, scope, hex_canonical_request
-    )
+    );
+    // println!("string_to_sign:===========\n{}\n===========", res);
+    res
 }
 
 fn sign_hmac_sha256_byte(secret: &[u8], str_to_sign: &[u8]) -> Vec<u8> {
