@@ -2,7 +2,7 @@
 //!
 //! [阿里云API文档](https://help.aliyun.com/zh/oss/developer-reference/bucket-operations/)
 
-use super::utils::{into_request_header, sign_authorization};
+use super::utils::{handle_response_status, into_request_header, sign_authorization};
 use super::OSSClient;
 use crate::error::Error;
 use crate::oss::sign_v4::{sign_v4, HTTPVerb};
@@ -181,7 +181,7 @@ impl OSSClient {
         x_header: Option<PutBucketHeader<'_>>,
         bucket_conf: Option<CreateBucketConfiguration<'_>>,
     ) -> Result<(), Error> {
-        let url = Url::parse(&format!("https://{0}.{1}/{0}/", bucket_name, endpoint)).unwrap();
+        let sign_url = Url::parse(&format!("https://{0}.{1}/{0}/", bucket_name, endpoint)).unwrap();
         let mut canonical_header = BTreeMap::new();
         if let Some(h) = x_header {
             if let Some(acl) = h.x_oss_acl {
@@ -192,7 +192,7 @@ impl OSSClient {
             }
         }
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", url.host_str().unwrap());
+        canonical_header.insert("host", sign_url.host_str().unwrap());
 
         let mut additional_header = BTreeSet::new();
         additional_header.insert("host");
@@ -200,7 +200,7 @@ impl OSSClient {
         let authorization = sign_v4(
             &self.region,
             HTTPVerb::Put,
-            &url,
+            &sign_url,
             &canonical_header,
             Some(&additional_header),
             &self.access_key_id,
@@ -223,12 +223,7 @@ impl OSSClient {
             .body(rq_xml)
             .send()
             .await?;
-        if !resp.status().is_success() {
-            return Err(Error::RequestAPIFailed {
-                status: resp.status().to_string(),
-                text: resp.text().await?,
-            });
-        }
+        let _ = handle_response_status(resp).await?;
 
         Ok(())
     }

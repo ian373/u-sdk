@@ -95,3 +95,15 @@ pub(crate) fn into_request_header(map: HashMap<&str, &str>) -> HeaderMap {
         })
         .collect()
 }
+
+pub(crate) async fn handle_response_status(resp: reqwest::Response) -> Result<String, Error> {
+    let status = resp.status();
+    let text = resp.text().await?;
+    if !status.is_success() {
+        return Err(Error::RequestAPIFailed {
+            status: status.to_string(),
+            text,
+        });
+    }
+    Ok(text)
+}

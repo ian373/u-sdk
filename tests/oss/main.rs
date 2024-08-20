@@ -45,7 +45,7 @@ async fn put_bucket_test() {
 
     let res = client
         .put_bucket(
-            "example-oss-todel",
+            "example-oss-test-todel",
             "oss-cn-hangzhou.aliyuncs.com",
             None,
             None,

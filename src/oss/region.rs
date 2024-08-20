@@ -1,6 +1,6 @@
 //! [API 文档](https://help.aliyun.com/zh/oss/developer-reference/describeregions)
 
-use super::utils::into_request_header;
+use super::utils::{handle_response_status, into_request_header};
 use super::OSSClient;
 use crate::error::Error;
 use crate::oss::sign_v4::{sign_v4, HTTPVerb};
@@ -28,7 +28,7 @@ pub struct RegionInfo {
 impl OSSClient {
     /// - `region`: 如果为`None`，则查询所有支持地域对应的Endpoint信息
     pub async fn describe_regions(&self, region: Option<&str>) -> Result<RegionInfoList, Error> {
-        let url = Url::parse_with_params(
+        let sign_url = Url::parse_with_params(
             &format!("https://{}", self.endpoint),
             [("regions", region.unwrap_or_default())],
         )
@@ -36,7 +36,7 @@ impl OSSClient {
 
         let mut canonical_header = BTreeMap::new();
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", url.host_str().unwrap());
+        canonical_header.insert("host", sign_url.host_str().unwrap());
 
         let mut additional_header = BTreeSet::new();
         additional_header.insert("host");
@@ -44,7 +44,7 @@ impl OSSClient {
         let authorization = sign_v4(
             &self.region,
             HTTPVerb::Get,
-            &url,
+            &sign_url,
             &canonical_header,
             Some(&additional_header),
             &self.access_key_id,
@@ -58,8 +58,13 @@ impl OSSClient {
         header.insert("Date", &gmt);
         let header_map = into_request_header(header);
 
-        let resp = self.http_client.get(url).headers(header_map).send().await?;
-        let text = resp.text().await?;
+        let resp = self
+            .http_client
+            .get(sign_url)
+            .headers(header_map)
+            .send()
+            .await?;
+        let text = handle_response_status(resp).await?;
         let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)

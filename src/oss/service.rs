@@ -1,4 +1,4 @@
-use super::utils::into_request_header;
+use super::utils::{handle_response_status, into_request_header};
 use super::OSSClient;
 use crate::error::Error;
 use crate::oss::sign_v4::{sign_v4, HTTPVerb};
@@ -94,15 +94,16 @@ impl OSSClient {
         };
         // println!("query_map: {:?}", query_map);
 
-        // 构建url用于签名使用
+        // 构建url用于签名使用;签名使用的url的host在构建签名的时候用不到的，理论上可以是任意值，这里用endpoint
         // 此api不涉及bucket，url使用https://endpoint
-        let url = Url::parse_with_params(&format!("https://{}", self.endpoint), query_map).unwrap();
+        let sign_url =
+            Url::parse_with_params(&format!("https://{}", self.endpoint), query_map).unwrap();
         // 构建canonical_header，canonical_header包含了公共请求头的部分内容
         let mut canonical_header = BTreeMap::new();
         // x-oss-content-sha256是必须存在且值固定
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
         // host为addition_header中指定的需要额外添加到签名计算中的参数
-        canonical_header.insert("host", url.host_str().unwrap());
+        canonical_header.insert("host", sign_url.host_str().unwrap());
         if let Some(s) = x_oss_resource_group_id {
             canonical_header.insert("x-oss-resource-group-id", s);
         }
@@ -113,7 +114,7 @@ impl OSSClient {
         let authorization = sign_v4(
             &self.region,
             HTTPVerb::Get,
-            &url,
+            &sign_url,
             &canonical_header,
             Some(&additional_header),
             &self.access_key_id,
@@ -127,8 +128,13 @@ impl OSSClient {
         header.insert("Date", &gmt);
         let header_map = into_request_header(header);
 
-        let resp = self.http_client.get(url).headers(header_map).send().await?;
-        let text = resp.text().await?;
+        let resp = self
+            .http_client
+            .get(sign_url)
+            .headers(header_map)
+            .send()
+            .await?;
+        let text = handle_response_status(resp).await?;
         // println!("text: {}", text);
         let res = quick_xml::de::from_str(&text)?;
 
