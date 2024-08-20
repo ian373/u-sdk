@@ -41,25 +41,20 @@ async fn describe_regions_test() {
 
 #[tokio::test]
 async fn put_bucket_test() {
-    use oss::bucket::{CreateBucketConfiguration, PutBucketHeader};
-
     let client = get_oss_client();
-
-    let x_oss_header = PutBucketHeader::default();
-    let params = CreateBucketConfiguration::default();
 
     let res = client
         .put_bucket(
-            x_oss_header,
-            params,
-            "oss-cn-hangzhou.aliyuncs.com",
             "example-oss-todel",
+            "oss-cn-hangzhou.aliyuncs.com",
+            None,
+            None,
         )
         .await;
 
     match res {
         Ok(_) => println!("success!"),
-        Err(e) => println!("{:?}", e),
+        Err(e) => println!("{:#?}", e),
     }
 }
 

@@ -24,7 +24,6 @@ pub struct PutBucketHeader<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
 #[serde(rename_all = "PascalCase")]
-
 pub struct CreateBucketConfiguration<'a> {
     /// 默认为`Standard`
     pub storage_class: Option<&'a str>,
@@ -177,56 +176,59 @@ pub struct BucketStat {
 impl OSSClient {
     pub async fn put_bucket(
         &self,
-        x_header: PutBucketHeader<'_>,
-        params: CreateBucketConfiguration<'_>,
-        endpoint: &str,
         bucket_name: &str,
+        endpoint: &str,
+        x_header: Option<PutBucketHeader<'_>>,
+        bucket_conf: Option<CreateBucketConfiguration<'_>>,
     ) -> Result<(), Error> {
-        let mut oss_header_map = BTreeMap::new();
-        if let Some(s) = x_header.x_oss_acl {
-            oss_header_map.insert("x-oss-acl".to_owned(), s.to_owned());
+        let url = Url::parse(&format!("https://{0}.{1}/{0}/", bucket_name, endpoint)).unwrap();
+        let mut canonical_header = BTreeMap::new();
+        if let Some(h) = x_header {
+            if let Some(acl) = h.x_oss_acl {
+                canonical_header.insert("x-oss-acl", acl);
+            }
+            if let Some(gid) = h.x_oss_resource_group_id {
+                canonical_header.insert("x-oss-resource-group-id", gid);
+            }
         }
-        if let Some(s) = x_header.x_oss_resource_group_id {
-            oss_header_map.insert("x-oss-resource-group-id".to_owned(), s.to_owned());
-        }
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", url.host_str().unwrap());
 
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let authorization = sign_v4(
+            &self.region,
+            HTTPVerb::Put,
+            &url,
+            &canonical_header,
+            Some(&additional_header),
             &self.access_key_id,
             &self.access_key_secret,
-            "PUT",
-            None,
-            None,
-            &now_gmt,
-            Some(&oss_header_map),
-            Some(bucket_name),
-            None,
+            &now,
         );
 
-        let mut header_map = HashMap::new();
-        header_map.extend(oss_header_map);
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
 
-        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        common_header.insert("Host".to_owned(), format!("{}.{}", bucket_name, endpoint));
-
-        header_map.extend(common_header);
-
-        let header_map = into_header_map(header_map);
-
-        // let rq_xml = if params.storage_class.is_none() && params.data_redundancy_type.is_none() {
-        //     "".to_owned()
-        // } else {
-        //     quick_xml::se::to_string(&params).unwrap()
-        // };
-        // 理论上当params两个属性值都为None时应该rq_xml应该为""，但是此时解析结果为：<CreateBucketConfiguration/>也不影响请求
-        let rq_xml = quick_xml::se::to_string(&params).unwrap();
+        let rq_xml = quick_xml::se::to_string(&bucket_conf)?;
         // println!("rq_xml: {}", rq_xml);
-        self.http_client
-            .put(format!("https://{}.{}", bucket_name, endpoint))
+        let resp = self
+            .http_client
+            .put(format!("https://{}.{}/", bucket_name, endpoint))
             .headers(header_map)
             .body(rq_xml)
             .send()
             .await?;
+        if !resp.status().is_success() {
+            return Err(Error::RequestAPIFailed {
+                status: resp.status().to_string(),
+                text: resp.text().await?,
+            });
+        }
 
         Ok(())
     }
