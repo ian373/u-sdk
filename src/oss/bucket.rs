@@ -11,6 +11,7 @@ use crate::error::Error;
 use crate::utils::common::{gmt_format, into_header_map, now_gmt};
 
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use url::Url;
 
@@ -39,21 +40,23 @@ pub struct CreateBucketConfiguration<'a> {
 
 // region:    --- list objects v2
 /// `list-type`将自动设为2
+#[serde_as]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ListObjectsV2Query<'a> {
+    // list-type: 2
     pub delimiter: Option<&'a str>,
     pub start_after: Option<&'a str>,
     pub continuation_token: Option<&'a str>,
-    // 最好改为u16类型
-    /// `u16`类型
-    pub max_keys: Option<&'a str>,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub max_keys: Option<u16>,
     pub prefix: Option<&'a str>,
     pub encoding_type: Option<&'a str>,
-    /// `bool`类型
-    pub fetch_owner: Option<&'a str>,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub fetch_owner: Option<bool>,
 }
+impl SerializeToHashMap for ListObjectsV2Query<'_> {}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -235,33 +238,48 @@ impl OSSClient {
         &self,
         query_params: ListObjectsV2Query<'_>,
     ) -> Result<ListBucketResult, Error> {
-        let query_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(query_params).unwrap()).unwrap();
+        let mut query_map = query_params.serialize_to_hashmap()?;
 
-        let mut url = Url::parse_with_params(&self.bucket_url(), query_map).unwrap();
-        // 添加固定的query
-        url.query_pairs_mut().append_pair("list-type", "2");
+        // 添加固定的query参数
+        query_map.insert("list-type".to_owned(), "2".to_owned());
+        let sign_url = Url::parse_with_params(
+            &format!("https://{}.{}/", self.bucket, self.endpoint),
+            query_map,
+        )
+        .unwrap();
 
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "GET",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(&self.bucket),
-            None,
-        );
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", sign_url.host_str().unwrap());
 
-        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Get,
+            uri: &sign_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
 
-        let header_map = into_header_map(common_header);
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
 
-        let resp = self.http_client.get(url).headers(header_map).send().await?;
+        let resp = self
+            .http_client
+            .get(sign_url)
+            .headers(header_map)
+            .send()
+            .await?;
 
-        let text = resp.text().await?;
+        let text = handle_response_status(resp).await?;
         // println!("text: {}", text);
         let res = quick_xml::de::from_str(&text)?;
 

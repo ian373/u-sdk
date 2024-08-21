@@ -65,15 +65,9 @@ async fn list_objects_v2_test() {
     let client = get_oss_client();
 
     let params = ListObjectsV2Query {
-        delimiter: None,
-        start_after: Some("t"),
-        continuation_token: None,
-        max_keys: Some("3"),
         prefix: Some("test/"),
-        encoding_type: None,
-        fetch_owner: Some("true"),
+        ..Default::default()
     };
-
     let res = client.list_objects_v2(params).await;
 
     match res {
