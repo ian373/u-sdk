@@ -42,11 +42,21 @@ fn get_canonical_request(
     };
     let canonical_query_string = uri
         .query_pairs()
+        .map(|(k, v)| {
+            let encoded_k = url::form_urlencoded::byte_serialize(k.as_bytes()).collect::<String>();
+            if v.is_empty() {
+                (encoded_k, "".to_string())
+            } else {
+                let encoded_v =
+                    url::form_urlencoded::byte_serialize(v.as_bytes()).collect::<String>();
+                (encoded_k, encoded_v)
+            }
+        })
         .collect::<BTreeMap<_, _>>()
-        .iter()
+        .into_iter()
         .map(|(k, v)| {
             if v.is_empty() {
-                k.to_string()
+                k
             } else {
                 format!("{}={}", k, v)
             }
@@ -78,7 +88,6 @@ fn get_canonical_request(
         "UNSIGNED-PAYLOAD"
     );
 
-    // println!("canonical_request:===========\n{}\n===========", res);
     res
 }
 
@@ -131,6 +140,10 @@ impl OSSClient {
             sign_v4param.header_map,
             sign_v4param.additional_header,
         );
+        // println!(
+        //     "canonical_request_str:====\n{}\n====",
+        //     canonical_request_str
+        // );
         let mut hasher = Sha256::new();
         hasher.update(canonical_request_str.as_bytes());
         let hex_canonical_request = hex::encode(hasher.finalize());
