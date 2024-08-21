@@ -95,7 +95,7 @@ async fn get_bucket_location_test() {
 
     match res {
         Ok(s) => println!("res:\n {}", s),
-        Err(e) => println!("error: {:?}", e),
+        Err(e) => println!("error: {}", e),
     }
 }
 
@@ -103,11 +103,11 @@ async fn get_bucket_location_test() {
 async fn get_bucket_stat_test() {
     let client = get_oss_client();
 
-    let res = client.get_bucket_stat(Some("example-oss-todel")).await;
+    let res = client.get_bucket_stat().await;
 
     match res {
-        Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => println!("error: {:?}", e),
+        Ok(s) => println!("res:\n {:#?}", s),
+        Err(e) => println!("error: {}", e),
     }
 }
 

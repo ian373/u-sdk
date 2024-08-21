@@ -3,12 +3,10 @@
 //! [阿里云API文档](https://help.aliyun.com/zh/oss/developer-reference/bucket-operations/)
 
 use super::sign_v4::{HTTPVerb, SignV4Param};
-use super::utils::{
-    handle_response_status, into_request_header, sign_authorization, SerializeToHashMap,
-};
+use super::utils::{handle_response_status, into_request_header, SerializeToHashMap};
 use super::OSSClient;
 use crate::error::Error;
-use crate::utils::common::{gmt_format, into_header_map, now_gmt};
+use crate::utils::common::gmt_format;
 
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -370,42 +368,42 @@ impl OSSClient {
     }
 
     /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
-    pub async fn get_bucket_stat(&self, other_bucket: Option<&str>) -> Result<BucketStat, Error> {
-        let now_gmt = now_gmt();
-        let bucket_name = if let Some(b) = other_bucket {
-            b
-        } else {
-            &self.bucket
-        };
-        let url = Url::parse_with_params(
-            &format!("https://{}.{}", bucket_name, self.endpoint),
+    pub async fn get_bucket_stat(&self) -> Result<BucketStat, Error> {
+        let request_url = Url::parse_with_params(
+            &format!("https://{}.{}", self.bucket, self.endpoint),
             [("stat", "")],
         )
         .unwrap();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "GET",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(bucket_name),
-            // 你可以认为，这个请求其实是请求bucket的一个特殊object
-            Some("?stat"),
-        );
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Get,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let auth = self.sign_v4(sign_v4_param);
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &auth);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
 
-        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        common_header.insert(
-            "Host".to_owned(),
-            format!("{}.{}", bucket_name, self.endpoint),
-        );
+        let resp = self
+            .http_client
+            .get(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
 
-        let header_map = into_header_map(common_header);
-
-        let resp = self.http_client.get(url).headers(header_map).send().await?;
-
-        let text = resp.text().await?;
+        let text = handle_response_status(resp).await?;
         let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
