@@ -91,7 +91,7 @@ async fn get_bucket_info_test() {
 async fn get_bucket_location_test() {
     let client = get_oss_client();
 
-    let res = client.get_bucket_location(Some("example-oss-todel")).await;
+    let res = client.get_bucket_location().await;
 
     match res {
         Ok(s) => println!("res:\n {}", s),
