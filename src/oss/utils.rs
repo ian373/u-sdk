@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::utils::common::sign_hmac_sha1;
 use base64::{engine::general_purpose, Engine};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
 pub fn get_content_md5(bytes: &[u8]) -> String {
@@ -106,4 +107,13 @@ pub(crate) async fn handle_response_status(resp: reqwest::Response) -> Result<St
         });
     }
     Ok(text)
+}
+pub(crate) trait SerializeToHashMap
+where
+    Self: Sized + Serialize,
+{
+    fn serialize_to_hashmap(&self) -> Result<HashMap<String, String>, Error> {
+        let r = serde_json::from_value(serde_json::to_value(self)?)?;
+        Ok(r)
+    }
 }

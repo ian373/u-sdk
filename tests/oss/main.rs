@@ -25,7 +25,7 @@ async fn list_buckets_test() {
     let res = client.list_buckets(None, Some(query)).await;
     match res {
         Ok(s) => println!("res:\n{:#?}", s),
-        Err(e) => println!("{:#?}", e),
+        Err(e) => println!("{}", e),
     }
 }
 
@@ -35,7 +35,7 @@ async fn describe_regions_test() {
     let res = client.describe_regions(Some("oss-ap-northeast-1")).await;
     match res {
         Ok(s) => println!("res:\n{:#?}", s),
-        Err(e) => println!("{:#?}", e),
+        Err(e) => println!("{}", e),
     }
 }
 
@@ -54,7 +54,7 @@ async fn put_bucket_test() {
 
     match res {
         Ok(_) => println!("success!"),
-        Err(e) => println!("{:#?}", e),
+        Err(e) => println!("{}", e),
     }
 }
 
@@ -77,8 +77,8 @@ async fn list_objects_v2_test() {
     let res = client.list_objects_v2(params).await;
 
     match res {
-        Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => println!("error: {:?}", e),
+        Ok(s) => println!("res:\n {:#?}", s),
+        Err(e) => println!("error: {}", e),
     }
 }
 
@@ -88,8 +88,8 @@ async fn get_bucket_info_test() {
     let res = client.get_bucket_info().await;
 
     match res {
-        Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => println!("error: {:#?}", e),
+        Ok(s) => println!("res:\n {:#?}", s),
+        Err(e) => println!("error: {}", e),
     }
 }
 

@@ -2,10 +2,12 @@
 //!
 //! [阿里云API文档](https://help.aliyun.com/zh/oss/developer-reference/bucket-operations/)
 
-use super::utils::{handle_response_status, into_request_header, sign_authorization};
+use super::sign_v4::{HTTPVerb, SignV4Param};
+use super::utils::{
+    handle_response_status, into_request_header, sign_authorization, SerializeToHashMap,
+};
 use super::OSSClient;
 use crate::error::Error;
-use crate::oss::sign_v4::{sign_v4, HTTPVerb};
 use crate::utils::common::{gmt_format, into_header_map, now_gmt};
 
 use serde::{Deserialize, Serialize};
@@ -13,6 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use url::Url;
 
 // region:    --- put bucket
+#[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct PutBucketHeader<'a> {
@@ -20,6 +23,8 @@ pub struct PutBucketHeader<'a> {
     pub x_oss_acl: Option<&'a str>,
     pub x_oss_resource_group_id: Option<&'a str>,
 }
+
+impl SerializeToHashMap for PutBucketHeader<'_> {}
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
@@ -181,36 +186,34 @@ impl OSSClient {
         x_header: Option<PutBucketHeader<'_>>,
         bucket_conf: Option<CreateBucketConfiguration<'_>>,
     ) -> Result<(), Error> {
-        let sign_url = Url::parse(&format!("https://{0}.{1}/{0}/", bucket_name, endpoint)).unwrap();
+        let request_url = Url::parse(&format!("https://{}.{}", bucket_name, endpoint)).unwrap();
         let mut canonical_header = BTreeMap::new();
-        if let Some(h) = x_header {
-            if let Some(acl) = h.x_oss_acl {
-                canonical_header.insert("x-oss-acl", acl);
-            }
-            if let Some(gid) = h.x_oss_resource_group_id {
-                canonical_header.insert("x-oss-resource-group-id", gid);
-            }
-        }
+        let put_bucket_map = if let Some(h) = x_header {
+            h.serialize_to_hashmap()?
+        } else {
+            HashMap::with_capacity(0)
+        };
+        canonical_header.extend(put_bucket_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", sign_url.host_str().unwrap());
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
         let mut additional_header = BTreeSet::new();
         additional_header.insert("host");
         let now = time::OffsetDateTime::now_utc();
-        let authorization = sign_v4(
-            &self.region,
-            HTTPVerb::Put,
-            &sign_url,
-            &canonical_header,
-            Some(&additional_header),
-            &self.access_key_id,
-            &self.access_key_secret,
-            &now,
-        );
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Put,
+            uri: &request_url,
+            bucket: Some(bucket_name),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
 
         let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
         header.insert("Authorization", &authorization);
-        let gmt = gmt_format(now);
+        let gmt = gmt_format(&now);
         header.insert("Date", &gmt);
         let header_map = into_request_header(header);
 
@@ -218,7 +221,7 @@ impl OSSClient {
         // println!("rq_xml: {}", rq_xml);
         let resp = self
             .http_client
-            .put(format!("https://{}.{}/", bucket_name, endpoint))
+            .put(request_url)
             .headers(header_map)
             .body(rq_xml)
             .send()
@@ -267,51 +270,41 @@ impl OSSClient {
 
     /// - `bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取指定的`bucket`的信息
     pub async fn get_bucket_info(&self) -> Result<BucketInfo, Error> {
-        let url = Url::parse_with_params(
-            &format!("https://{0}.{1}/{0}/", self.bucket, self.endpoint),
+        let request_url = Url::parse_with_params(
+            &format!("https://{}.{}", self.bucket, self.endpoint),
             [("bucketInfo", "")],
         )
         .unwrap();
         let mut canonical_header = BTreeMap::new();
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", url.host_str().unwrap());
+        canonical_header.insert("host", request_url.host_str().unwrap());
         let mut additional_header = BTreeSet::new();
         additional_header.insert("host");
         let now = time::OffsetDateTime::now_utc();
-        let auth = sign_v4(
-            &self.region,
-            HTTPVerb::Get,
-            &url,
-            &canonical_header,
-            Some(&additional_header),
-            &self.access_key_id,
-            &self.access_key_secret,
-            &now,
-        );
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Get,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let auth = self.sign_v4(sign_v4_param);
         let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
         header.insert("Authorization", &auth);
-        let gmt = gmt_format(now);
+        let gmt = gmt_format(&now);
         header.insert("Date", &gmt);
 
         let header_map = into_request_header(header);
-
         let resp = self
             .http_client
-            .get(format!(
-                "https://{}.{}/?bucketInfo",
-                self.bucket, self.endpoint
-            ))
+            .get(request_url)
             .headers(header_map)
             .send()
             .await?;
 
-        if !resp.status().is_success() {
-            return Err(Error::RequestAPIFailed {
-                status: resp.status().to_string(),
-                text: resp.text().await?,
-            });
-        }
-        let text = resp.text().await?;
+        let text = handle_response_status(resp).await?;
         let res = quick_xml::de::from_str(&text)?;
 
         Ok(res)
