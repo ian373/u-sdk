@@ -18,7 +18,7 @@ pub fn now_gmt() -> String {
 }
 
 #[cfg(feature = "oss")]
-pub fn gmt_format(date_time: OffsetDateTime) -> String {
+pub fn gmt_format(date_time: &OffsetDateTime) -> String {
     use time::format_description::well_known::Rfc2822;
     date_time.format(&Rfc2822).unwrap().replace("+0000", "GMT")
 }
