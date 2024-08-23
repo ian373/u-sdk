@@ -1,6 +1,7 @@
 mod test_config;
 
 use oss::object::types_rs::*;
+use std::collections::HashMap;
 use u_ali_sdk::oss;
 
 fn get_oss_client() -> oss::OSSClient {
@@ -113,32 +114,27 @@ async fn get_bucket_stat_test() {
 
 #[tokio::test]
 async fn put_object_test() {
-    use std::collections::HashMap;
-
+    let data = b"test123".to_vec();
     let client = get_oss_client();
-
-    let c_header = CHeader::default();
-    let x_header = XHeader {
-        x_oss_forbid_overwrite: Some("true"),
+    let put_object_header = PutObjectHeader {
+        content_type: Some("text/plain"),
+        cache_control: Some("max-age=6666"),
         ..Default::default()
     };
-    let mut x_meta_map = HashMap::new();
-    x_meta_map.insert("test-1", "test-v-1");
-
+    let mut meta_map = HashMap::new();
+    meta_map.insert("key", "value");
+    meta_map.insert("key2", "value2");
     let res = client
         .put_object(
-            c_header,
-            x_header,
-            Some(x_meta_map.into()),
-            r"C:\Users\123.TXT",
-            "/test_file/",
-            None,
+            put_object_header,
+            Some(XMetaHeader(meta_map)),
+            "test/test_txt.txt",
+            data,
         )
         .await;
-
     match res {
-        Ok(s) => println!("res:\n {:?}", s),
-        Err(e) => println!("error: {:?}", e),
+        Ok(_) => println!("res: success"),
+        Err(e) => println!("error: {}", e),
     }
 }
 
@@ -196,29 +192,7 @@ async fn copy_object_test() {
 
 #[tokio::test]
 async fn append_object_test() {
-    let client = get_oss_client();
-
-    let c_header = AppendObjectCHeader::default();
-    let x_header = AppendObjectXHeader::default();
-
-    let res = client
-        .append_object(
-            b"test123".to_vec(),
-            "/test_path/123.txt",
-            None,
-            21,
-            c_header,
-            x_header,
-            None,
-        )
-        .await;
-
-    match res {
-        Ok(s) => {
-            println!("OK: {:#?}", s);
-        }
-        Err(e) => println!("error: {:?}", e),
-    }
+    unimplemented!("not implemented");
 }
 
 #[tokio::test]

@@ -1,91 +1,92 @@
 //! 关于Object操作/基础操作
+//!
+//! [官方文档](https://help.aliyun.com/zh/oss/developer-reference/basic-operations-1/)
 
 use super::types_rs::*;
-use super::utils::{get_dest_path, get_local_file};
+use super::utils::partition_header;
 use crate::error::Error;
-use crate::oss::utils::{get_content_md5, sign_authorization};
+use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
+use crate::oss::utils::{
+    get_content_md5, handle_response_status, into_request_header, sign_authorization,
+    SerializeToHashMap,
+};
 use crate::oss::OSSClient;
-use crate::utils::common::{into_header_map, now_gmt};
+use crate::utils::common::{gmt_format, into_header_map, now_gmt};
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+/// Object基础操作
 impl OSSClient {
-    /// 本API将会一次性读取文件到内存然后进行上传，请注意上传文件的大小以免爆内存<br/>
-    /// - `content_type`，如果为None，则根据文件后缀名自动推测对应类型，但是不能保证推测100%正确
-    /// - `dest_path`：使用linux文件风格(`/xx/xx`)，且必须使用绝对路径，即以`/`开头,
-    /// 如果以`/`结尾，则使用上传文件的文件名称，如果以`/xxx.xx`结尾，则文件名使用`xxx.xx`<br/>
-    /// - 注意，本代码无法解析包含`/.`和`/..`的路径，如果出现上述情况，会导致`object_name`无法正确得出，从而导致签名计算错误。后期可能会解决此类问题
+    /// - `content_type`，不会进行MIME合法性检查
+    /// - `object_name`：不会进行合法性检查，遵守OSS的Object命名规则
+    /// - `data`：如果需要创建文件夹，object_name以`/`结尾，`Vec`大小为0即可
+    ///
+    /// 上传成功后不会返回响应内容
     pub async fn put_object(
         &self,
-        c_header: CHeader<'_>,
-        x_header: XHeader<'_>,
-        x_meta_header: Option<XMetaHeader>,
-        local_file_path: &str,
-        dest_path: &str,
-        content_type: Option<&str>,
+        put_bucket_header: PutObjectHeader<'_>,
+        x_meta_header: Option<XMetaHeader<'_>>,
+        object_name: &str,
+        data: Vec<u8>,
     ) -> Result<(), Error> {
-        let (local_file_name, bytes) = get_local_file(local_file_path)?;
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/{}", // url不能添加`/`结尾，因为是否有`/`由object_name决定
+            self.bucket, self.endpoint, object_name
+        ))
+        .unwrap();
 
-        let content_type = if let Some(s) = content_type {
-            s.to_owned()
+        let mut req_header_map = put_bucket_header.serialize_to_hashmap()?;
+        // 添加api剩下的请求头
+        req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
+        req_header_map.insert("content-length".to_owned(), data.len().to_string());
+        // 把需要签名的header和不需要签名的header分开
+        let (sign_map, remaining_map) = partition_header(req_header_map);
+
+        // 创建CanonicalHeaders，把所有需要签名的header放到CanonicalHeaders中
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        // 如果有x_meta_header，将其添加到canonical_header中参与签名
+        let meta_map = if let Some(m) = x_meta_header {
+            m.get_meta_map()
         } else {
-            mime_guess::MimeGuess::from_path(&local_file_name)
-                .first_or_octet_stream()
-                .to_string()
+            HashMap::new()
         };
+        canonical_header.extend(meta_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let mut header_map = HashMap::new();
-        let c_header_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
-        header_map.extend(c_header_map);
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Put,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
 
-        header_map.insert("Content-Length".to_owned(), bytes.len().to_string());
+        // 把canonical_header转化为最终的header，补齐剩下的未参与签名计算的header
+        // 包括：剩下必要的公共请求头，api header中的非签名字段
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let header_map = into_request_header(header);
 
-        let mut x_header_map: BTreeMap<String, String> =
-            serde_json::from_value(serde_json::to_value(x_header).unwrap()).unwrap();
-
-        let mut oss_header_map = BTreeMap::new();
-        oss_header_map.append(&mut x_header_map);
-        if let Some(m) = x_meta_header {
-            oss_header_map.append(&mut m.get_btree_map());
-        }
-
-        let now_gmt = now_gmt();
-        let dest_path = get_dest_path(dest_path, &local_file_name)?;
-        let content_md5 = get_content_md5(&bytes);
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "PUT",
-            Some(&content_md5),
-            Some(&content_type),
-            &now_gmt,
-            Some(&oss_header_map),
-            Some(&self.bucket),
-            // object_name不包含dest_path的第一个字符'/'
-            Some(&dest_path[1..]),
-        );
-        header_map.insert("Content-MD5".to_owned(), content_md5);
-
-        header_map.extend(oss_header_map);
-
-        let common_header = self.get_common_header_map(
-            &authorization,
-            Some(&bytes.len().to_string()),
-            Some(&content_type),
-            &now_gmt,
-        );
-        header_map.extend(common_header);
-
-        let header_map = into_header_map(header_map);
-
-        let builder = self
+        let resp = self
             .http_client
-            .put(format!("{}{}", self.bucket_url(), dest_path))
+            .put(request_url)
             .headers(header_map)
-            .body(bytes);
-        // println!("builder: {:#?}", builder);
-        builder.send().await?;
+            .body(data)
+            .send()
+            .await?;
+
+        let _ = handle_response_status(resp).await?;
 
         Ok(())
     }
@@ -217,18 +218,18 @@ impl OSSClient {
         position: u64,
         c_header: AppendObjectCHeader<'_>,
         x_header: AppendObjectXHeader<'_>,
-        x_meta_header: Option<XMetaHeader>,
+        // x_meta_header: Option<XMetaHeader>,
     ) -> Result<AppendObjectResponseHeaderInfo, Error> {
         let mut header_map = HashMap::new();
         let c_header_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
         header_map.extend(c_header_map);
 
-        let mut x_header_map: BTreeMap<String, String> =
+        let x_header_map: BTreeMap<String, String> =
             serde_json::from_value(serde_json::to_value(x_header).unwrap()).unwrap();
-        if let Some(m) = x_meta_header {
-            x_header_map.append(&mut m.get_btree_map());
-        }
+        // if let Some(m) = x_meta_header {
+        //     x_header_map.append(&mut m.get_btree_map());
+        // }
 
         let content_type = if let Some(s) = content_type {
             s.to_owned()

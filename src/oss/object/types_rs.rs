@@ -1,27 +1,28 @@
+use crate::oss::utils::SerializeToHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 // region:    --- pub object
-/// 一般性Header<br/>
-/// 以下两个header由程序读取文件的时候获取相应信息并自动添加：<br/>
-/// - `content_md5`
-/// - `content_length`
+/// Header字段中：
+/// - content_md5: 由程序自动添加
+/// - content_length：由程序自动添加
+/// - e_tag：不添加
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct CHeader<'a> {
+pub struct PutObjectHeader<'a> {
+    // 公共请求头
+    /// 对于MIME不会进行检查合法性检查
+    pub content_type: Option<&'a str>,
+    // content_length  自动添加
+
+    // api请求头
     pub cache_control: Option<&'a str>,
     pub content_disposition: Option<&'a str>,
     pub content_encoding: Option<&'a str>,
-    pub e_tag: Option<&'a str>,
+    // content_md5  自动添加
+    // e_tag  不添加
     pub expires: Option<&'a str>,
-}
-
-/// x-oss-xxx Header
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct XHeader<'a> {
     pub x_oss_forbid_overwrite: Option<&'a str>,
     pub x_oss_server_side_encryption: Option<&'a str>,
     pub x_oss_server_side_data_encryption: Option<&'a str>,
@@ -31,23 +32,18 @@ pub struct XHeader<'a> {
     pub x_oss_tagging: Option<&'a str>,
 }
 
+impl SerializeToHashMap for PutObjectHeader<'_> {}
+
 /// x-oss-meta-* Header<br/>
 /// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
-pub struct XMetaHeader(BTreeMap<String, String>);
+pub struct XMetaHeader<'a>(pub HashMap<&'a str, &'a str>);
 
-impl XMetaHeader {
-    pub fn get_btree_map(self) -> BTreeMap<String, String> {
+impl XMetaHeader<'_> {
+    pub fn get_meta_map(&self) -> HashMap<String, String> {
         self.0
-    }
-}
-
-impl From<HashMap<&str, &str>> for XMetaHeader {
-    fn from(value: HashMap<&str, &str>) -> Self {
-        let map = value
-            .into_iter()
-            .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_owned()))
-            .collect();
-        Self(map)
+            .iter()
+            .map(|(k, v)| (format!("x-oss-meta-{k}"), v.to_string()))
+            .collect()
     }
 }
 // endregion: --- pub object
