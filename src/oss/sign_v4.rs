@@ -25,6 +25,9 @@ impl Display for HTTPVerb {
     }
 }
 
+// 构造过程和要求参考api文档中的[步骤1：构造CanonicalRequest]部分
+// 对于canonical_header的构造，对[k:v]有一些要求（如必须存在的header，存在则加入签名的header，等等）
+// 这里会保证k是小写的，其它要求不会进行检查，由调用者保证
 fn get_canonical_request(
     http_verb: HTTPVerb,
     uri: &Url,
@@ -112,7 +115,6 @@ pub(crate) struct SignV4Param<'a> {
 impl OSSClient {
     /// verb: GET, PUT, POST, DELETE...
     /// uri like: "/", "/bucket/", "/bucket/object"; query: "xxx?xxx=xxx&xxx=xxx"
-    // 关于签名所必须的参数参考顶部签名文档，如canonical_header, additional_header等
     pub(crate) fn sign_v4(&self, sign_v4param: SignV4Param) -> String {
         let date_time = sign_v4param.date_time;
         let date = date_time
