@@ -63,6 +63,18 @@ impl OSSClient {
         }
     }
 
+    pub fn bucket(&self) -> &str {
+        &self.bucket
+    }
+
+    pub fn region(&self) -> &str {
+        &self.region
+    }
+
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
     fn bucket_url(&self) -> String {
         format!("https://{}.{}", self.bucket, self.endpoint)
     }

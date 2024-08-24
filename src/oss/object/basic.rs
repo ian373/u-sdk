@@ -155,62 +155,69 @@ impl OSSClient {
         Ok((data, resp_header))
     }
 
-    /// - `x_oss_copy_source`为请求头必带参数，这里抽离出来作为函数参数输入，eg: `/source_bucket_name/source_object_name`
-    /// - `dest_bucket`如果为`None`，则为`OSSClinet`配置的`bucket`，eg：`oss-example`
-    /// - `dest_end_point`，同上，eg：`oss-cn-hangzhou.aliyuncs.com`
-    /// - `dest_oss_path`：你复制object到`dest_bucket`的路径，eg：`/dir1/abc.txt`
+    /// - 不会对参数的bucket，endpoint，object_name，region进行合法性检查，需要自行保证
+    /// - `copy_object_dest_info`：如为None，将使用client中的提供的相关信息
     pub async fn copy_object(
         &self,
-        x_oss_copy_source: &str,
-        dest_bucket: Option<&str>,
-        dest_end_point: Option<&str>,
-        dest_oss_path: &str,
         copy_object_x_header: CopyObjectXHeader<'_>,
-    ) -> Result<CopyObjectResult, Error> {
-        let mut x_header_map: BTreeMap<String, String> =
-            serde_json::from_value(serde_json::to_value(copy_object_x_header).unwrap()).unwrap();
-        x_header_map.insert("x-oss-copy-source".to_owned(), x_oss_copy_source.to_owned());
-
-        let bucket = if let Some(s) = dest_bucket {
-            s.to_owned()
-        } else {
-            self.bucket.to_owned()
-        };
-        let end_point = if let Some(p) = dest_end_point {
-            p.to_owned()
-        } else {
-            self.endpoint.to_owned()
-        };
-        let host = format!("{}.{}", bucket, end_point);
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "PUT",
-            None,
-            None,
-            &now_gmt,
-            Some(&x_header_map),
-            Some(&bucket),
-            Some(&dest_oss_path[1..]),
+        dest_object_name: &str,
+        copy_object_dest_info: Option<CopyObjectDestInfo<'_>>,
+    ) -> Result<(), Error> {
+        let (dest_region, dest_end_point, dest_bucket) =
+            if let Some(dest_info) = copy_object_dest_info {
+                (dest_info.region, dest_info.endpoint, dest_info.bucket)
+            } else {
+                (
+                    self.region.as_ref(),
+                    self.endpoint.as_ref(),
+                    self.bucket.as_ref(),
+                )
+            };
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            dest_bucket, dest_end_point, dest_object_name
+        ))
+        .unwrap();
+        let mut canonical_header = BTreeMap::new();
+        let copy_object_header = copy_object_x_header.serialize_to_hashmap()?;
+        canonical_header.extend(
+            copy_object_header
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str())),
         );
-        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        common_header.insert("Host".to_owned(), host);
-        common_header.extend(x_header_map);
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let header_map = into_header_map(common_header);
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: dest_region,
+            http_verb: HTTPVerb::Put,
+            uri: &request_url,
+            bucket: Some(dest_bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
 
-        let builder = self
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
+
+        let resp = self
             .http_client
-            .put(format!("https://{}.{}{}", bucket, end_point, dest_oss_path))
-            .headers(header_map);
-        // println!("builder: {:#?}", builder);
-        let resp = builder.send().await?;
+            .put(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
 
-        let text = resp.text().await?;
-        let res = quick_xml::de::from_str(&text)?;
+        let _ = handle_response_status(resp).await?;
 
-        Ok(res)
+        Ok(())
     }
 
     /// - 当创建一个新的Appendable Object的时候，`position`设为`0`，如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置

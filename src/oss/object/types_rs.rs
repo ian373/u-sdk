@@ -76,6 +76,7 @@ impl SerializeToHashMap for GetObjectHeader<'_> {}
 #[serde(rename_all = "kebab-case")]
 pub struct CopyObjectXHeader<'a> {
     pub x_oss_forbid_overwrite: Option<&'a str>,
+    pub x_oss_copy_source: &'a str,
     pub x_oss_copy_source_if_match: Option<&'a str>,
     pub x_oss_copy_source_if_none_match: Option<&'a str>,
     pub x_oss_copy_source_if_unmodified_since: Option<&'a str>,
@@ -89,11 +90,12 @@ pub struct CopyObjectXHeader<'a> {
     pub x_oss_tagging_directive: Option<&'a str>,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct CopyObjectResult {
-    pub e_tag: String,
-    pub last_modified: String,
+impl SerializeToHashMap for CopyObjectXHeader<'_> {}
+
+pub struct CopyObjectDestInfo<'a> {
+    pub region: &'a str,
+    pub endpoint: &'a str,
+    pub bucket: &'a str,
 }
 // endregion: --- copy object
 

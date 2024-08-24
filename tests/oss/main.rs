@@ -163,24 +163,24 @@ async fn copy_object_test() {
 
     let x_header = CopyObjectXHeader {
         x_oss_forbid_overwrite: Some("true"),
+        x_oss_copy_source: &format!("/{}/{}", client.bucket(), "test/test_txt.txt"),
         ..Default::default()
+    };
+    let dest_info = CopyObjectDestInfo {
+        region: client.region(),
+        bucket: "example-oss-todel",
+        endpoint: client.endpoint(),
     };
 
     let res = client
-        .copy_object(
-            "/uua-private-01/13468799.TXT",
-            Some("example-oss-todel"),
-            None,
-            "/1122/123.txt",
-            x_header,
-        )
+        .copy_object(x_header, "copy/test_txt_copy.txt", Some(dest_info))
         .await;
 
     match res {
-        Ok(r) => {
-            println!("res:{:#?}", r);
+        Ok(_) => {
+            println!("success!");
         }
-        Err(e) => println!("error: {:?}", e),
+        Err(e) => println!("error: {}", e),
     }
 }
 
