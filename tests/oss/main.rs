@@ -186,7 +186,28 @@ async fn copy_object_test() {
 
 #[tokio::test]
 async fn append_object_test() {
-    unimplemented!("not implemented");
+    let client = get_oss_client();
+
+    let append_header = AppendObjectHeader {
+        content_type: Some("text/plain"),
+        position: 13,
+        ..Default::default()
+    };
+    let res = client
+        .append_object(
+            "test/append_object.txt",
+            append_header,
+            None,
+            b"text123dfasdf".to_vec(),
+        )
+        .await;
+
+    match res {
+        Ok(next_pos) => {
+            println!("next_pos:{}", next_pos);
+        }
+        Err(e) => println!("error: {}", e),
+    }
 }
 
 #[tokio::test]

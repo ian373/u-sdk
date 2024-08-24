@@ -224,89 +224,74 @@ impl OSSClient {
     #[allow(clippy::too_many_arguments)]
     pub async fn append_object(
         &self,
-        bytes: Vec<u8>,
-        dest_path: &str,
-        content_type: Option<&str>,
-        position: u64,
-        c_header: AppendObjectCHeader<'_>,
-        x_header: AppendObjectXHeader<'_>,
-        // x_meta_header: Option<XMetaHeader>,
-    ) -> Result<AppendObjectResponseHeaderInfo, Error> {
-        let mut header_map = HashMap::new();
-        let c_header_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
-        header_map.extend(c_header_map);
+        object_name: &str,
+        append_object_header: AppendObjectHeader<'_>,
+        x_meta_header: Option<XMetaHeader<'_>>,
+        data: Vec<u8>,
+    ) -> Result<u64, Error> {
+        let request_url = url::Url::parse_with_params(
+            &format!("https://{}.{}/{}", self.bucket, self.endpoint, object_name),
+            [
+                ("append", ""),
+                ("position", &append_object_header.position.to_string()),
+            ],
+        )
+        .unwrap();
+        let mut req_header_map = append_object_header.serialize_to_hashmap()?;
+        req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
+        req_header_map.insert("content-length".to_owned(), data.len().to_string());
+        let (sign_map, remaining_map) = partition_header(req_header_map);
 
-        let x_header_map: BTreeMap<String, String> =
-            serde_json::from_value(serde_json::to_value(x_header).unwrap()).unwrap();
-        // if let Some(m) = x_meta_header {
-        //     x_header_map.append(&mut m.get_btree_map());
-        // }
-
-        let content_type = if let Some(s) = content_type {
-            s.to_owned()
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let meta_map = if let Some(m) = x_meta_header {
+            m.get_meta_map()
         } else {
-            mime_guess::MimeGuess::from_path(dest_path)
-                .first_or_octet_stream()
-                .to_string()
+            HashMap::with_capacity(0)
         };
-        let now_gmt = now_gmt();
-        let contet_md5 = get_content_md5(&bytes);
-        // `https://bucket.endpoint`之后的内容为object_path，`&object_path[1..]`即为此次的`object_name`
-        let object_path = format!("{}?append&position={}", dest_path, position);
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "POST",
-            Some(&contet_md5),
-            Some(&content_type),
-            &now_gmt,
-            Some(&x_header_map),
-            Some(&self.bucket),
-            Some(&object_path[1..]),
-        );
+        canonical_header.extend(meta_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        header_map.extend(x_header_map);
-        let common_header_map = self.get_common_header_map(
-            &authorization,
-            Some(&bytes.len().to_string()),
-            Some(&content_type),
-            &now_gmt,
-        );
-        header_map.extend(common_header_map);
-        header_map.insert("Content-MD5".to_owned(), contet_md5);
-        header_map.insert("Position".to_owned(), position.to_string());
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Post,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
 
-        let header_map = into_header_map(header_map);
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let header_map = into_request_header(header);
 
-        let builder = self
+        let mut resp = self
             .http_client
-            .post(format!("{}{}", self.bucket_url(), object_path))
+            .post(request_url)
             .headers(header_map)
-            .body(bytes);
-        let resp = builder.send().await?;
+            .body(data)
+            .send()
+            .await?;
 
-        let resp_headers = resp.headers();
-        // 下面直接使用unwrap()，默认不会出错，如果实际中出现错误，这里代码要优化
-        let next_pos: u64 = resp_headers
-            .get("x-oss-next-append-position")
+        let next_position = resp.headers_mut().remove("x-oss-next-append-position");
+        let _ = handle_response_status(resp).await?;
+        let next_position = next_position
             .unwrap()
             .to_str()
             .unwrap()
-            .parse()
-            .unwrap();
-        let crc: u64 = resp_headers
-            .get("x-oss-hash-crc64ecma")
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .parse()
+            .parse::<u64>()
             .unwrap();
 
-        Ok(AppendObjectResponseHeaderInfo {
-            x_oss_next_append_position: next_pos,
-            x_oss_hash_crc64ecma: crc,
-        })
+        Ok(next_position)
     }
 
     pub async fn delete_object(&self, oss_path: &str) -> Result<(), Error> {

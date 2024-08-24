@@ -1,5 +1,6 @@
 use crate::oss::utils::SerializeToHashMap;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 
 // region:    --- pub object
@@ -100,32 +101,32 @@ pub struct CopyObjectDestInfo<'a> {
 // endregion: --- copy object
 
 // region:    --- append object
+#[serde_as]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct AppendObjectCHeader<'a> {
-    // content_md5, position将根据函数自动添加
+pub struct AppendObjectHeader<'a> {
+    // 公共请求头
+    /// 对于MIME不会进行检查合法性检查
+    pub content_type: Option<&'a str>,
+    // content_length  自动添加
+
+    // api请求头
+    // append, position添加到url的query中;append不添加到header中
+    #[serde_as(as = "DisplayFromStr")]
+    pub position: u64,
     pub cache_control: Option<&'a str>,
     pub content_disposition: Option<&'a str>,
     pub content_encoding: Option<&'a str>,
+    // content_md5自动添加
     pub expires: Option<&'a str>,
-}
-
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct AppendObjectXHeader<'a> {
     pub x_oss_server_side_encryption: Option<&'a str>,
     pub x_oss_object_acl: Option<&'a str>,
     pub x_oss_storage_class: Option<&'a str>,
     pub x_oss_tagging: Option<&'a str>,
 }
 
-#[derive(Debug)]
-pub struct AppendObjectResponseHeaderInfo {
-    pub x_oss_next_append_position: u64,
-    pub x_oss_hash_crc64ecma: u64,
-}
+impl SerializeToHashMap for AppendObjectHeader<'_> {}
 // endregion: --- append object
 
 // region:    --- delete_multiple_objects
