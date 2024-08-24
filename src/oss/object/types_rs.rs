@@ -66,6 +66,8 @@ pub struct GetObjectHeader<'a> {
     pub if_none_match: Option<&'a str>,
     pub accept_encoding: Option<&'a str>,
 }
+
+impl SerializeToHashMap for GetObjectHeader<'_> {}
 // endregion: --- get object
 
 // region:    --- copy object

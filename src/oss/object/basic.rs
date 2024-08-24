@@ -91,63 +91,68 @@ impl OSSClient {
         Ok(())
     }
 
-    /// 获取单个文件或其部分数据，一次性读取数据到内存，然后再保存到本地磁盘中<br/>
-    /// - `oss_path`：oss上object的绝对路径，linux路径风格，不能包含`/.`或`/..`
-    /// - `dest_path`: 保存在本地磁盘的路径，需要一个文件的绝对路径
-    /// - RETURN：当`c_header`的值全为`None`是，说明是一个普通文件下载，成功请求后函数不返回任何内容；
-    /// 当`c_header`的值不全为`None`，说明对返回结果有一些配置，需要用到Response Header，这里把响应头转化为`HashMap`，用户可从中取得相应的内容
+    /// 返回：
+    /// - `Vec<u8>`：文件数据
+    /// - `HashMap<String, String>`：所有响应头
     pub async fn get_object(
         &self,
-        c_header: GetObjectHeader<'_>,
-        oss_path: &str,
-        dest_path: &str,
-    ) -> Result<Option<HashMap<String, String>>, Error> {
-        // TODO 加强对路径合法性的校验，防止因为路径不合法导致的错误
+        get_object_header: GetObjectHeader<'_>,
+        object_name: &str,
+    ) -> Result<(Vec<u8>, HashMap<String, String>), Error> {
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            self.bucket, self.endpoint, object_name
+        ))
+        .unwrap();
 
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "GET",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(&self.bucket),
-            Some(&oss_path[1..]),
-        );
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let c_header_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(c_header).unwrap()).unwrap();
-        let c_header_is_empty = c_header_map.is_empty();
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Get,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
 
-        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        let mut header_map = HashMap::new();
-        header_map.extend(common_header);
-        header_map.extend(c_header_map);
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        let req_header_map = get_object_header.serialize_to_hashmap()?;
+        header.extend(req_header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
 
-        let header_map = into_header_map(header_map);
-
-        let builder = self
+        let resp = self
             .http_client
-            .get(format!("{}{}", self.bucket_url(), oss_path))
-            .headers(header_map);
-        let resp = builder.send().await?;
-
-        if c_header_is_empty {
-            std::fs::write(dest_path, resp.bytes().await?)
-                .map_err(|e| Error::AnyError(format!("write data to disk error, {}", e)))?;
-            Ok(None)
-        } else {
-            let map: HashMap<String, String> = resp
-                .headers()
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
-                .collect();
-            std::fs::write(dest_path, resp.bytes().await?)
-                .map_err(|e| Error::AnyError(format!("write data to disk error, {}", e)))?;
-            Ok(Some(map))
+            .get(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await?;
+            return Err(Error::RequestAPIFailed {
+                status: status.to_string(),
+                text,
+            });
         }
+        let resp_header = resp
+            .headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
+            .collect();
+        let data = resp.bytes().await?.to_vec();
+
+        Ok((data, resp_header))
     }
 
     /// - `x_oss_copy_source`为请求头必带参数，这里抽离出来作为函数参数输入，eg: `/source_bucket_name/source_object_name`

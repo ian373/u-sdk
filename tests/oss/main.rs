@@ -147,19 +147,13 @@ async fn get_object_test() {
         ..Default::default()
     };
 
-    let res = client
-        .get_object(c_header, "/test/test_fi.txt", r"C:\Users\666.txt")
-        .await;
+    let res = client.get_object(c_header, "test/test_txt.txt").await;
 
     match res {
-        Ok(r) => {
-            if let Some(map) = r {
-                println!("ok, and headers is: {:#?}", map);
-            } else {
-                println!("ok!");
-            }
+        Ok((_data, header)) => {
+            println!("response_header:{:#?}", header);
         }
-        Err(_e) => println!("error: {:?}", _e),
+        Err(e) => println!("error: {}", e),
     }
 }
 
