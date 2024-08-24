@@ -32,8 +32,6 @@ time = { version = "0.3.36", features = ["formatting"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 quick-xml = { version = "0.36.1", features = ["serialize"], optional = true }
 
-mime_guess = "2.0.5"
-
 [dev-dependencies]
 tokio = { version = "1.39.3", features = ["full"] }
 toml = "0.8.19"
