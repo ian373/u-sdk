@@ -337,65 +337,65 @@ impl OSSClient {
         Ok(())
     }
 
-    /// 注意，删除多个文件的时候，你的`DeleteObject::key`填的是文件名称，这和`put_object`的参数有所不同：
-    /// 这里的key需要去掉`oss_path`前面的斜杠`\`，如：
-    /// - oss_path: `/aa/123.txt`
-    /// - key需要写为：`aa/123/txt`
-    // TODO MAYBE：其它的所有代码，其实object_name应该为a/abc/c这种，然后代码自己添加/->/a/abc/c才合理。还是说这里统一一下使用/a/abc/c？
     pub async fn delete_multiple_objects(
         &self,
         encoding_type: Option<&str>,
         delete_objects: Vec<DeleteObject<'_>>,
-        quiet_resp: bool,
+        is_quiet_resp: bool,
     ) -> Result<Option<DeleteResult>, Error> {
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/?delete",
+            self.bucket, self.endpoint
+        ))
+        .unwrap();
         let delete_req = DeleteMultipleObjectsRequest {
-            quiet: &quiet_resp.to_string(),
+            quiet: is_quiet_resp,
             object: delete_objects,
         };
-        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req).unwrap();
+        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req)?;
 
-        let content_length = req_body.len();
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
         let content_md5 = get_content_md5(req_body.as_bytes());
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "POST",
-            Some(&content_md5),
-            None,
-            &now_gmt,
-            None,
-            Some(&self.bucket),
-            Some("?delete"),
-        );
+        canonical_header.insert("content-md5", &content_md5);
 
-        let mut common_header = self.get_common_header_map(
-            &authorization,
-            Some(&content_length.to_string()),
-            None,
-            &now_gmt,
-        );
-        common_header.insert("Content-MD5".to_owned(), content_md5);
-        if let Some(s) = encoding_type {
-            common_header.insert("Encoding-type".to_owned(), s.to_owned());
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Post,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
+
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let content_length = req_body.len().to_string();
+        header.insert("Content-Length", &content_length);
+        if let Some(encoding) = encoding_type {
+            header.insert("Encoding-type", encoding);
         }
-        let header_map = into_header_map(common_header);
+        let header_map = into_request_header(header);
 
-        let builder = self
+        let resp = self
             .http_client
-            .post(format!("{}/?delete", self.bucket_url()))
+            .post(request_url)
             .headers(header_map)
-            .body(req_body);
-        let resp = builder.send().await?;
+            .body(req_body)
+            .send()
+            .await?;
 
-        if quiet_resp {
-            return Ok(None);
-        }
-
-        let text = resp.text().await?;
+        let text = handle_response_status(resp).await?;
         let res = quick_xml::de::from_str(&text)?;
-
-        Ok(Some(res))
+        Ok(res)
     }
 
     pub async fn head_object(

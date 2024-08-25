@@ -132,8 +132,8 @@ impl SerializeToHashMap for AppendObjectHeader<'_> {}
 // region:    --- delete_multiple_objects
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct DeleteMultipleObjectsRequest<'a> {
-    pub quiet: &'a str,
+pub(crate) struct DeleteMultipleObjectsRequest<'a> {
+    pub quiet: bool,
     pub object: Vec<DeleteObject<'a>>,
 }
 
@@ -155,8 +155,9 @@ pub struct DeleteResult {
 #[serde(rename_all = "PascalCase")]
 pub struct Deleted {
     pub key: String,
-    pub delete_marker: Option<String>,
+    pub delete_marker: Option<bool>,
     pub delete_marker_version_id: Option<String>,
+    pub version_id: Option<String>,
 }
 // endregion: --- delete_multiple_objects
 
