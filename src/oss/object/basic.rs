@@ -220,8 +220,8 @@ impl OSSClient {
         Ok(())
     }
 
-    /// - 当创建一个新的Appendable Object的时候，`position`设为`0`，如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
-    #[allow(clippy::too_many_arguments)]
+    /// - 当创建一个新的Appendable Object的时候，`position`设为`0`
+    /// - 如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
     pub async fn append_object(
         &self,
         object_name: &str,
@@ -294,29 +294,46 @@ impl OSSClient {
         Ok(next_position)
     }
 
-    pub async fn delete_object(&self, oss_path: &str) -> Result<(), Error> {
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "DELETE",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(&self.bucket),
-            Some(&oss_path[1..]),
-        );
+    /// 无论object是否存在都会执行删除操作并返回成功
+    pub async fn delete_object(&self, object_name: &str) -> Result<(), Error> {
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            self.bucket, self.endpoint, object_name
+        ))
+        .unwrap();
 
-        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        let header_map = into_header_map(common_header);
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let builder = self
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Delete,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
+
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
+
+        let resp = self
             .http_client
-            .delete(format!("{}{}", self.bucket_url(), oss_path))
-            .headers(header_map);
-        builder.send().await?;
+            .delete(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
 
+        let _ = handle_response_status(resp).await?;
         Ok(())
     }
 

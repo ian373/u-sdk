@@ -214,13 +214,11 @@ async fn append_object_test() {
 async fn delete_object_test() {
     let client = get_oss_client();
 
-    let res = client.delete_object("/123.txt").await;
+    let res = client.delete_object("test/append_object.txt").await;
 
     match res {
-        Ok(_) => {
-            println!("OK!");
-        }
-        Err(e) => println!("error: {:?}", e),
+        Ok(_) => println!("delete success!"),
+        Err(e) => println!("error: {}", e),
     }
 }
 
