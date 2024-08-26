@@ -171,4 +171,6 @@ pub struct HeadObjectHeader<'a> {
     pub if_match: Option<&'a str>,
     pub if_none_match: Option<&'a str>,
 }
+
+impl SerializeToHashMap for HeadObjectHeader<'_> {}
 // endregion: --- head object

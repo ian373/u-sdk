@@ -13,6 +13,7 @@ pub(crate) enum HTTPVerb {
     Put,
     Post,
     Delete,
+    Head,
 }
 impl Display for HTTPVerb {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -21,6 +22,7 @@ impl Display for HTTPVerb {
             HTTPVerb::Put => write!(f, "PUT"),
             HTTPVerb::Post => write!(f, "POST"),
             HTTPVerb::Delete => write!(f, "DELETE"),
+            HTTPVerb::Head => write!(f, "HEAD"),
         }
     }
 }

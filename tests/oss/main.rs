@@ -246,15 +246,11 @@ async fn delete_multiple_objects_test() {
 async fn head_object_test() {
     let client = get_oss_client();
 
-    let req_header = HeadObjectHeader::default();
-
-    let res = client.head_object("/test_path/123.txt", req_header).await;
+    let res = client.head_object("copy/test_txt_copy.txt", None).await;
 
     match res {
-        Ok(s) => {
-            println!("ok_res:{:#?}", s);
-        }
-        Err(e) => println!("error: {:?}", e),
+        Ok(s) => println!("ok_res:{:#?}", s),
+        Err(e) => println!("error: {}", e),
     }
 }
 

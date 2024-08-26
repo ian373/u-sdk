@@ -400,34 +400,61 @@ impl OSSClient {
 
     pub async fn head_object(
         &self,
-        oss_path: &str,
-        req_header: HeadObjectHeader<'_>,
+        object_name: &str,
+        head_object_header: Option<HeadObjectHeader<'_>>,
     ) -> Result<HashMap<String, String>, Error> {
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "HEAD",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(&self.bucket),
-            Some(&oss_path[1..]),
-        );
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            self.bucket, self.endpoint, object_name
+        ))
+        .unwrap();
 
-        let mut common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        let req_header_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(&req_header).unwrap()).unwrap();
-        common_header.extend(req_header_map);
-        let header_map = into_header_map(common_header);
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let builder = self
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Head,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
+
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        let req_header_map = if let Some(h) = head_object_header {
+            h.serialize_to_hashmap()?
+        } else {
+            HashMap::with_capacity(0)
+        };
+        header.extend(req_header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
+
+        let resp = self
             .http_client
-            .head(format!("{}{}", self.bucket_url(), oss_path))
-            .headers(header_map);
-        let resp = builder.send().await?;
-        let response_header: HashMap<String, String> = resp
+            .head(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await?;
+            return Err(Error::RequestAPIFailed {
+                status: status.to_string(),
+                text,
+            });
+        }
+        let response_header = resp
             .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
