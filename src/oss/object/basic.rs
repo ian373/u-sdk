@@ -7,11 +7,10 @@ use super::utils::partition_header;
 use crate::error::Error;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use crate::oss::utils::{
-    get_content_md5, handle_response_status, into_request_header, sign_authorization,
-    SerializeToHashMap,
+    get_content_md5, handle_response_status, into_request_header, SerializeToHashMap,
 };
 use crate::oss::OSSClient;
-use crate::utils::common::{gmt_format, into_header_map, now_gmt};
+use crate::utils::common::gmt_format;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -465,29 +464,56 @@ impl OSSClient {
 
     /// - 这里返回`HashMap`而没有返回struct，主要考虑到response header中有一些参数文档中没说出来，不便于转化为指定的struct
     /// - 返回的`HashMap`中所有的`key`均为小写，这里代码并没有使用`to_lowercase`，因为`reqwest`获取的header都为小写
-    pub async fn get_object_meta(&self, oss_path: &str) -> Result<HashMap<String, String>, Error> {
-        let now_gmt = now_gmt();
-        let authorization = sign_authorization(
-            &self.access_key_id,
-            &self.access_key_secret,
-            "HEAD",
-            None,
-            None,
-            &now_gmt,
-            None,
-            Some(&self.bucket),
-            Some(&format!("{}?objectMeta", &oss_path[1..])),
-        );
+    pub async fn get_object_meta(
+        &self,
+        object_name: &str,
+    ) -> Result<HashMap<String, String>, Error> {
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/{}?objectMeta",
+            self.bucket, self.endpoint, object_name
+        ))
+        .unwrap();
 
-        let common_header = self.get_common_header_map(&authorization, None, None, &now_gmt);
-        let header_map = into_header_map(common_header);
+        let mut canonical_header = BTreeMap::new();
+        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let builder = self
+        let mut additional_header = BTreeSet::new();
+        additional_header.insert("host");
+        let now = time::OffsetDateTime::now_utc();
+        let sign_v4_param = SignV4Param {
+            signing_region: &self.region,
+            http_verb: HTTPVerb::Head,
+            uri: &request_url,
+            bucket: Some(&self.bucket),
+            header_map: &canonical_header,
+            additional_header: Some(&additional_header),
+            date_time: &now,
+        };
+        let authorization = self.sign_v4(sign_v4_param);
+
+        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+        header.insert("Authorization", &authorization);
+        let gmt = gmt_format(&now);
+        header.insert("Date", &gmt);
+        let header_map = into_request_header(header);
+
+        let resp = self
             .http_client
-            .head(format!("{}{}?objectMeta", self.bucket_url(), oss_path))
-            .headers(header_map);
-        let resp = builder.send().await?;
-        let response_header: HashMap<String, String> = resp
+            .head(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await?;
+            return Err(Error::RequestAPIFailed {
+                status: status.to_string(),
+                text,
+            });
+        }
+        let response_header = resp
             .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))

@@ -9,15 +9,6 @@ pub fn get_uuid() -> String {
 }
 
 #[cfg(feature = "oss")]
-pub fn now_gmt() -> String {
-    use time::format_description::well_known::Rfc2822;
-    OffsetDateTime::now_utc()
-        .format(&Rfc2822)
-        .unwrap()
-        .replace("+0000", "GMT")
-}
-
-#[cfg(feature = "oss")]
 pub fn gmt_format(date_time: &OffsetDateTime) -> String {
     use time::format_description::well_known::Rfc2822;
     date_time.format(&Rfc2822).unwrap().replace("+0000", "GMT")

@@ -258,12 +258,10 @@ async fn head_object_test() {
 async fn get_object_meta_test() {
     let client = get_oss_client();
 
-    let res = client.get_object_meta("/test_path/123.txt").await;
+    let res = client.get_object_meta("copy/test_txt_copy.txt").await;
 
     match res {
-        Ok(s) => {
-            println!("ok_res:{:#?}", s);
-        }
-        Err(e) => println!("error: {:?}", e),
+        Ok(s) => println!("ok_res:{:#?}", s),
+        Err(e) => println!("error: {}", e),
     }
 }

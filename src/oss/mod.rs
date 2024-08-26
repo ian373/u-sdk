@@ -9,8 +9,6 @@
 
 // 所有api的请求逻辑和操作都基本相同，具体逻辑或步骤可参考service.rs的注释理解
 
-use std::collections::HashMap;
-
 pub mod bucket;
 pub mod object;
 pub mod region;
@@ -73,33 +71,5 @@ impl OSSClient {
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
-    }
-
-    fn bucket_url(&self) -> String {
-        format!("https://{}.{}", self.bucket, self.endpoint)
-    }
-
-    fn get_common_header_map(
-        &self,
-        authorization: &str,
-        content_length: Option<&str>,
-        content_type: Option<&str>,
-        date: &str,
-    ) -> HashMap<String, String> {
-        let mut map = HashMap::new();
-        map.insert("Authorization".to_owned(), authorization.to_owned());
-        if let Some(s) = content_length {
-            map.insert("Content-Length".to_owned(), s.to_owned());
-        }
-        if let Some(s) = content_type {
-            map.insert("Content-Type".to_owned(), s.to_owned());
-        }
-        map.insert("Date".to_owned(), date.to_owned());
-        map.insert(
-            "Host".to_owned(),
-            format!("{}.{}", self.bucket, self.endpoint),
-        );
-
-        map
     }
 }
