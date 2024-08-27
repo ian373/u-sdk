@@ -25,6 +25,7 @@ pub struct RegionInfo {
     pub accelerate_endpoint: String,
 }
 
+/// region API
 impl OSSClient {
     /// - `region`: 如果为`None`，则查询所有支持地域对应的Endpoint信息
     pub async fn describe_regions(&self, region: Option<&str>) -> Result<RegionInfoList, Error> {

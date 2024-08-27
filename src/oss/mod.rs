@@ -26,7 +26,9 @@ pub struct OSSClient {
     http_client: reqwest::Client,
 }
 
+/// 创建oss客户端
 impl OSSClient {
+    /// region和endpoint：<https://help.aliyun.com/zh/oss/user-guide/regions-and-endpoints>
     pub fn new(
         access_key_id: &str,
         access_key_secret: &str,

@@ -179,6 +179,7 @@ pub struct BucketStat {
 }
 // endregion: --- get bucket stat
 
+/// bucket相关API
 impl OSSClient {
     pub async fn put_bucket(
         &self,

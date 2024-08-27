@@ -68,6 +68,7 @@ pub struct Bucket {
 }
 // endregion: --- ListBucketResult
 
+/// service API
 impl OSSClient {
     pub async fn list_buckets(
         &self,
