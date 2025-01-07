@@ -34,3 +34,6 @@ pub mod translate;
 
 #[cfg(feature = "server_chan")]
 pub mod server_chan;
+
+#[cfg(feature = "deep_seek")]
+pub mod deep_seek;

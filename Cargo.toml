@@ -11,6 +11,7 @@ oss = ["dep:quick-xml"]
 # 机器翻译
 translate = []
 server_chan = []
+deep_seek = []
 
 [dependencies]
 # 签名相关
