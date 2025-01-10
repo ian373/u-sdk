@@ -1,3 +1,6 @@
+use async_stream::stream;
+use bytes::{Buf, BytesMut};
+use futures_util::{stream::StreamExt, Stream};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -38,6 +41,11 @@ enum ResponseFormatType {
 }
 
 #[derive(Serialize, Debug)]
+struct StreamOption {
+    include_usage: bool,
+}
+
+#[derive(Serialize, Debug)]
 struct RequestParams {
     messages: Vec<Message>,
     model: Model,
@@ -47,7 +55,7 @@ struct RequestParams {
     response_format: Option<ResponseFormat>, //Default text
     stop: Option<()>,
     stream: bool,
-    stream_options: Option<()>,
+    stream_options: Option<StreamOption>,
     temperature: Option<f32>, //Default 1.0 Possible values: >= 0 and <= 2
     top_p: Option<f32>,       //Default 1.0 Possible values: <= 1
     tools: Option<()>,
@@ -186,10 +194,8 @@ impl DeepSeek {
             role: Role::User,
         });
 
-        // todo
         if self.request_params.stream {
-            eprintln!("stream is not supported yet");
-            return Err("stream is not supported yet".to_string());
+            self.request_params.stream = false;
         }
 
         let response = self
@@ -217,7 +223,124 @@ impl DeepSeek {
         }
     }
 
+    pub async fn chat_by_stream(
+        &mut self,
+        msg: &str,
+    ) -> Result<impl Stream<Item = StreamEvent>, String> {
+        self.request_params.messages.push(Message {
+            content: msg.to_string(),
+            role: Role::User,
+        });
+        self.request_params.stream = true;
+
+        let response = self
+            .client
+            .post(&format!("{}/chat/completions", BASE_URL))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&self.request_params)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !response.headers().contains_key("content-type")
+            || !response.headers()["content-type"]
+                .to_str()
+                .unwrap_or("")
+                .starts_with("text/event-stream")
+        {
+            return Err("Expected content-type: text/event-stream".to_string());
+        }
+
+        let mut body = response.bytes_stream();
+
+        let mut buffer = BytesMut::new();
+
+        let s = stream! {
+            while let Some(chunk) = body.next().await {
+            let chunk = chunk.unwrap();
+            buffer.extend(chunk);
+                while let Some(pos) = buffer.windows(2).position(|w| w == b"\n\n") {
+                    let event_data = serde_json::from_slice::<StreamEventData>(&buffer[6..pos]);
+                    match event_data {
+                        Ok(data) => {
+                                yield StreamEvent::Data(data);
+                        }
+                        Err(_) => {
+                            let s = String::from_utf8_lossy(&buffer[6..pos]);
+                            if s.trim() == "[DONE]" {
+                                yield StreamEvent::Finish;
+                            } else {
+                               yield StreamEvent::Unknown(s.to_string());
+                            }
+                        }
+                    }
+
+                    // 从 buffer 中移除已处理的部分
+                    buffer.advance(pos + 2);
+                }
+            }
+        };
+
+        Ok(Box::pin(s))
+    }
+
     pub fn get_msg_list(&self) -> &[Message] {
         &self.request_params.messages
     }
+}
+
+#[derive(Debug)]
+pub enum StreamEvent {
+    Data(StreamEventData),
+    Finish,
+    Unknown(String),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StreamEventData {
+    id: String,
+    choices: Vec<StreamDataChoices>,
+    created: i64,
+    model: String,
+    system_fingerprint: String,
+    object: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct StreamDataChoices {
+    delta: Delta,
+    finish_reason: Option<String>,
+    index: i32,
+}
+
+#[derive(Deserialize, Debug)]
+struct Delta {
+    content: Option<String>,
+    role: Option<Role>,
+}
+
+#[test]
+fn check_stream_event_data_deserialize() {
+    let json = r#"
+{
+  "id": "eff9fc88-c216-46ec-928f-64d8af234eee",
+  "object": "chat.completion.chunk",
+  "created": 1736350935,
+  "model": "deepseek-chat",
+  "system_fingerprint": "fp_3a5770e1b4",
+  "choices": [
+    {
+      "index": 0,
+      "delta": {
+        "role": "assistant",
+        "content": ""
+      },
+      "logprobs": null,
+      "finish_reason": null
+    }
+  ]
+}
+"#;
+    let data: StreamEventData = serde_json::from_str(json).unwrap();
+    println!("{:#?}", data);
 }
