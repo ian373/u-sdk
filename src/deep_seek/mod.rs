@@ -1,208 +1,47 @@
+pub mod types;
+
+use crate::deep_seek::types::{FixedParams, Role};
 use async_stream::stream;
-use bytes::{Buf, BytesMut};
 use futures_util::{stream::StreamExt, Stream};
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize, Serializer};
+use types::{ChatResponse, Message, RequestParams, StreamEvent, StreamEventData};
 
 const BASE_URL: &str = "https://api.deepseek.com";
-
-#[derive(Serialize, Debug)]
-pub struct Message {
-    content: String,
-    role: Role,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum Role {
-    System,
-    User,
-    Assistant,
-}
-
-#[derive(Serialize, Debug)]
-enum Model {
-    #[serde(rename = "deepseek-chat")]
-    DeepSeekChat,
-}
-
-#[derive(Serialize, Debug)]
-struct ResponseFormat {
-    #[serde(rename = "type")]
-    r#type: ResponseFormatType,
-}
-
-#[derive(Serialize, Debug)]
-enum ResponseFormatType {
-    #[serde(rename = "text")]
-    Text,
-    #[serde(rename = "json_object")]
-    JsonObject,
-}
-
-#[derive(Serialize, Debug)]
-struct StreamOption {
-    include_usage: bool,
-}
-
-#[derive(Serialize, Debug)]
-struct RequestParams {
-    messages: Vec<Message>,
-    model: Model,
-    frequency_penalty: Option<f32>, //Default 0.0 Possible values: >= -2 and <= 2
-    max_tokens: Option<i32>,        //Default 4096 Possible values: > 1
-    presence_penalty: Option<f32>,  //Default 0.0 Possible values: >= -2 and <= 2
-    response_format: Option<ResponseFormat>, //Default text
-    stop: Option<()>,
-    stream: bool,
-    stream_options: Option<StreamOption>,
-    temperature: Option<f32>, //Default 1.0 Possible values: >= 0 and <= 2
-    top_p: Option<f32>,       //Default 1.0 Possible values: <= 1
-    tools: Option<()>,
-    #[serde(serialize_with = "serialize_tolls_choices")]
-    tool_choice: Option<()>,
-    logprobs: bool,
-    top_logprobs: Option<i32>, //Possible values: >= 0 and <= 20 指定此参数时，logprobs 必须为 true。
-}
-
-impl Default for RequestParams {
-    fn default() -> Self {
-        Self {
-            messages: vec![Message {
-                content: "You are a helpful assistant".to_string(),
-                role: Role::System,
-            }],
-            model: Model::DeepSeekChat,
-            frequency_penalty: Some(0.0),
-            max_tokens: Some(4096),
-            presence_penalty: Some(0.0),
-            response_format: Some(ResponseFormat {
-                r#type: ResponseFormatType::Text,
-            }),
-            stop: None,
-            stream: false,
-            stream_options: None,
-            temperature: Some(1.0),
-            top_p: Some(1.0),
-            tools: None,
-            tool_choice: None,
-            logprobs: false,
-            top_logprobs: None,
-        }
-    }
-}
-
-fn serialize_tolls_choices<S>(value: &Option<()>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        Some(v) => serializer.serialize_some(v), // 如果是 Some，正常序列化
-        None => serializer.serialize_some("none"), // 如果是 None，序列化为 "none"
-    }
-}
-
-#[test]
-fn serialize_request_params() {
-    let json = serde_json::to_string_pretty(&RequestParams::default()).unwrap();
-    println!("{}", json);
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ChatResponse {
-    pub id: String,
-    pub choices: Vec<Choice>,
-    pub created: i64,
-    pub model: String,
-    pub system_fingerprint: String,
-    pub object: String,
-    pub usage: Usage,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Choice {
-    pub finish_reason: String,
-    pub index: i32,
-    pub message: ChoiceMessage,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ChoiceMessage {
-    pub content: String,
-    pub role: Role, // Role::Assistant
-                    // toll_calls先不用
-                    // logprobs先不用
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Usage {
-    pub completion_tokens: i32,
-    pub prompt_tokens: i32,
-    pub prompt_cache_hit_tokens: i32,
-    pub prompt_cache_miss_tokens: i32,
-    pub total_tokens: i32,
-}
 
 pub struct DeepSeek {
     api_key: String,
     client: reqwest::Client,
-    request_params: RequestParams,
-}
-
-#[test]
-fn check_response_deserialize() {
-    let json = r#"
-{
-  "id":"string","choices":[{
-    "finish_reason":"stop","index":0,"message":{
-      "content":"string","tool_calls":[{
-        "id":"string","type":"function","function":{
-          "name":"string","arguments":"string"
-        }
-      }],"role":"assistant"
-    },"logprobs":{
-      "content":[{
-        "token":"string","logprob":0,"bytes":[0],"top_logprobs":[{
-          "token":"string","logprob":0,"bytes":[0]
-        }]
-      }]
-    }
-  }],"created":0,"model":"string","system_fingerprint":"string",
-  "object":"chat.completion","usage":{
-    "completion_tokens":0,"prompt_tokens":0,"prompt_cache_hit_tokens":0,
-    "prompt_cache_miss_tokens":0,"total_tokens":0
-  }
-}
-"#;
-    let response: ChatResponse = serde_json::from_str(json).unwrap();
-    println!("{:#?}", response);
+    fixed_params: FixedParams,
 }
 
 impl DeepSeek {
     pub fn new(api_key: &str) -> Self {
-        let request_params = RequestParams::default();
+        let fixed_params = FixedParams::default();
         Self {
             api_key: api_key.to_string(),
             client: reqwest::Client::new(),
-            request_params,
+            fixed_params,
         }
     }
 
-    pub async fn chat(&mut self, msg: &str) -> Result<ChatResponse, String> {
-        self.request_params.messages.push(Message {
-            content: msg.to_string(),
-            role: Role::User,
-        });
+    pub async fn chat(&mut self, msg_list: &[Message]) -> Result<ChatResponse, String> {
+        check_msg_list(msg_list)?;
 
-        if self.request_params.stream {
-            self.request_params.stream = false;
+        // 防止 stream 为 true
+        if self.fixed_params.stream {
+            self.fixed_params.stream = false;
         }
+
+        let request_params = RequestParams {
+            messages: msg_list,
+            fix_params: &self.fixed_params,
+        };
 
         let response = self
             .client
-            .post(&format!("{}/chat/completions", BASE_URL))
+            .post(format!("{}/chat/completions", BASE_URL))
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&self.request_params)
+            .json(&request_params)
             .send()
             .await
             .map_err(|e| e.to_string())?;
@@ -213,10 +52,6 @@ impl DeepSeek {
                     .json::<ChatResponse>()
                     .await
                     .map_err(|e| e.to_string())?;
-                self.request_params.messages.push(Message {
-                    content: response.choices[0].message.content.clone(),
-                    role: response.choices[0].message.role.clone(),
-                });
                 Ok(response)
             }
             status => Err(format!("Request failed with status: {}", status)),
@@ -225,19 +60,23 @@ impl DeepSeek {
 
     pub async fn chat_by_stream(
         &mut self,
-        msg: &str,
+        msg_list: &[Message],
     ) -> Result<impl Stream<Item = StreamEvent>, String> {
-        self.request_params.messages.push(Message {
-            content: msg.to_string(),
-            role: Role::User,
-        });
-        self.request_params.stream = true;
+        check_msg_list(msg_list)?;
+
+        // 打开stream功能
+        self.fixed_params.stream = true;
+
+        let request_params = RequestParams {
+            messages: msg_list,
+            fix_params: &self.fixed_params,
+        };
 
         let response = self
             .client
-            .post(&format!("{}/chat/completions", BASE_URL))
+            .post(format!("{}/chat/completions", BASE_URL))
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&self.request_params)
+            .json(&request_params)
             .send()
             .await
             .map_err(|e| e.to_string())?;
@@ -252,95 +91,52 @@ impl DeepSeek {
         }
 
         let mut body = response.bytes_stream();
-
-        let mut buffer = BytesMut::new();
+        let mut buffer = String::new();
 
         let s = stream! {
-            while let Some(chunk) = body.next().await {
-            let chunk = chunk.unwrap();
-            buffer.extend(chunk);
-                while let Some(pos) = buffer.windows(2).position(|w| w == b"\n\n") {
-                    let event_data = serde_json::from_slice::<StreamEventData>(&buffer[6..pos]);
-                    match event_data {
-                        Ok(data) => {
-                                yield StreamEvent::Data(data);
-                        }
-                        Err(_) => {
-                            let s = String::from_utf8_lossy(&buffer[6..pos]);
-                            if s.trim() == "[DONE]" {
-                                yield StreamEvent::Finish;
-                            } else {
-                               yield StreamEvent::Unknown(s.to_string());
-                            }
-                        }
+            'req_stream: while let Some(chunk) = body.next().await {
+                let chunk = chunk.unwrap();
+                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                while let Some(pos) = buffer.find("\n\n") {
+                    let event_data = &buffer[..pos];
+                    // println!("{}", event_data);
+
+                    if event_data.starts_with("data: [DONE]") {
+                        yield StreamEvent::Finish;
+                        continue 'req_stream;
                     }
 
-                    // 从 buffer 中移除已处理的部分
-                    buffer.advance(pos + 2);
+                    if let Some(event) = event_data.strip_prefix("data:") {
+                        let event_data =serde_json::from_str::<StreamEventData>(event);
+                        match event_data {
+                            Ok(data) => {
+                                yield StreamEvent::Data(data);
+                            }
+                            Err(_) => {
+                                yield StreamEvent::Unknown(event.to_string());
+                            }
+                        }
+                    } else {
+                        yield StreamEvent::Unknown(event_data.to_string());
+                    }
+
+                    buffer = buffer[pos + 2..].to_string();
                 }
             }
         };
 
         Ok(Box::pin(s))
     }
+}
 
-    pub fn get_msg_list(&self) -> &[Message] {
-        &self.request_params.messages
+fn check_msg_list(msg_list: &[Message]) -> Result<(), String> {
+    if msg_list.is_empty() {
+        return Err("msg_list is empty".to_string());
+    } else if msg_list[0].role != Role::Assistant {
+        return Err("The first message role must be Assistant".to_string());
+    } else if msg_list.last().unwrap().role != Role::User {
+        return Err("The last message role must be User".to_string());
     }
-}
 
-#[derive(Debug)]
-pub enum StreamEvent {
-    Data(StreamEventData),
-    Finish,
-    Unknown(String),
-}
-
-#[derive(Deserialize, Debug)]
-pub struct StreamEventData {
-    id: String,
-    choices: Vec<StreamDataChoices>,
-    created: i64,
-    model: String,
-    system_fingerprint: String,
-    object: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct StreamDataChoices {
-    delta: Delta,
-    finish_reason: Option<String>,
-    index: i32,
-}
-
-#[derive(Deserialize, Debug)]
-struct Delta {
-    content: Option<String>,
-    role: Option<Role>,
-}
-
-#[test]
-fn check_stream_event_data_deserialize() {
-    let json = r#"
-{
-  "id": "eff9fc88-c216-46ec-928f-64d8af234eee",
-  "object": "chat.completion.chunk",
-  "created": 1736350935,
-  "model": "deepseek-chat",
-  "system_fingerprint": "fp_3a5770e1b4",
-  "choices": [
-    {
-      "index": 0,
-      "delta": {
-        "role": "assistant",
-        "content": ""
-      },
-      "logprobs": null,
-      "finish_reason": null
-    }
-  ]
-}
-"#;
-    let data: StreamEventData = serde_json::from_str(json).unwrap();
-    println!("{:#?}", data);
+    Ok(())
 }
