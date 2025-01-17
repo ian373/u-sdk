@@ -1,7 +1,8 @@
 use crate::error::Error;
+use serde::Serialize;
 
 #[derive(Default)]
-pub struct SendParams<'a> {
+pub struct TurboSendParams<'a> {
     pub title: &'a str,
     /// 消息内容
     pub description: Option<&'a str>,
@@ -11,12 +12,13 @@ pub struct SendParams<'a> {
     pub channel: Option<&'a [u8]>,
 }
 
-pub struct ServerChan<'a> {
+/// 使用Server酱Turbo
+pub struct ServerChanTurbo<'a> {
     token: &'a str,
     client: reqwest::Client,
 }
 
-impl<'a, 'b> ServerChan<'a>
+impl<'a, 'b> ServerChanTurbo<'a>
 where
     'a: 'b,
 {
@@ -27,7 +29,7 @@ where
         }
     }
 
-    pub async fn send_msg(&self, params: SendParams<'b>) -> Result<(), Error> {
+    pub async fn send_msg_turbo(&self, params: TurboSendParams<'b>) -> Result<(), Error> {
         if params.title.is_empty() {
             return Err(Error::AnyError("title can't be empty.".to_string()));
         }
@@ -63,5 +65,57 @@ where
         self.client.post(url).form(&p).send().await?;
 
         Ok(())
+    }
+}
+
+#[derive(Serialize)]
+pub struct SendParams<'a> {
+    /// 推送的标题
+    pub title: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// 推送的正文内容，则为必填，支持markdown
+    pub desp: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// 标签列表，多个标签使用竖线`|`分隔
+    pub tags: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// 推送消息的简短描述，用于指定消息卡片的内容部分，尤其是在推送markdown的时候
+    pub short: Option<&'a str>,
+}
+
+/// 使用Server酱3
+pub struct ServerChan3 {
+    url: String,
+    client: reqwest::Client,
+}
+
+impl ServerChan3 {
+    pub fn new(uid: i32, key: &str) -> Self {
+        Self {
+            url: format!("https://{}.push.ft07.com/send/{}.send", uid, key),
+            client: reqwest::Client::new(),
+        }
+    }
+
+    pub async fn send_msg(&self, params: &SendParams<'_>) -> Result<(), Error> {
+        let resp = self
+            .client
+            .post(&self.url)
+            .json(&params)
+            .send()
+            .await
+            .map_err(|_| Error::AnyError("\"reqwest\" send error".to_string()))?;
+
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(Error::AnyError(format!(
+                "Request failed with status: {}\n{}",
+                resp.status(),
+                resp.text()
+                    .await
+                    .unwrap_or("Failed to get response text".to_string())
+            )))
+        }
     }
 }
