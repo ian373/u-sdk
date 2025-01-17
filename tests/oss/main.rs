@@ -1,11 +1,29 @@
-mod test_config;
-
 use oss::object::types_rs::*;
 use std::collections::HashMap;
 use u_ali_sdk::oss;
 
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+pub struct AliConfig {
+    pub access_key_id: String,
+    pub access_key_secret: String,
+    pub endpoint: String,
+    pub bucket_name: String,
+    pub region: String,
+}
+
+impl AliConfig {
+    pub fn get_conf() -> Self {
+        let file_str = std::fs::read_to_string("tests/oss/config.toml").unwrap();
+        let conf = toml::from_str(&file_str).unwrap();
+
+        conf
+    }
+}
+
 fn get_oss_client() -> oss::OSSClient {
-    let conf = test_config::AliConfig::get_conf();
+    let conf = AliConfig::get_conf();
     oss::OSSClient::new(
         &conf.access_key_id,
         &conf.access_key_secret,

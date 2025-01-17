@@ -1,18 +1,35 @@
-mod test_config;
-
 use u_ali_sdk::email;
 use u_ali_sdk::error::Error;
+
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+pub struct AliConfig {
+    pub access_key_id: String,
+    pub access_key_secret: String,
+    pub account_name: String,
+    pub to_address: String,
+}
+
+impl AliConfig {
+    pub fn get_conf() -> Self {
+        let file_str = std::fs::read_to_string("tests/email/config.toml").unwrap();
+        let conf = toml::from_str(&file_str).unwrap();
+
+        conf
+    }
+}
 
 // 获取本地配置信息测试
 #[test]
 fn get_test_conf() {
-    let s = test_config::AliConfig::get_conf();
+    let s = AliConfig::get_conf();
     println!("{:?}", s);
 }
 
 #[tokio::test]
 async fn single_send_email() {
-    let conf = test_config::AliConfig::get_conf();
+    let conf = AliConfig::get_conf();
     let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
     let params = email::send_email::SingleSendEmailParams {
         account_name: &conf.account_name,
@@ -44,7 +61,7 @@ async fn single_send_email() {
 
 #[tokio::test]
 async fn desc_account_summary_test() {
-    let conf = test_config::AliConfig::get_conf();
+    let conf = AliConfig::get_conf();
     let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
 
     match client.desc_account_summary().await {
@@ -62,7 +79,7 @@ async fn desc_account_summary_test() {
 
 #[tokio::test]
 async fn query_domain_by_param_test() {
-    let conf = test_config::AliConfig::get_conf();
+    let conf = AliConfig::get_conf();
     let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
 
     let api_params = email::domain::APIParams {
@@ -87,7 +104,7 @@ async fn query_domain_by_param_test() {
 
 #[tokio::test]
 async fn get_ip_protection_test() {
-    let conf = test_config::AliConfig::get_conf();
+    let conf = AliConfig::get_conf();
     let client = email::EmailSdk::new(conf.access_key_id, conf.access_key_secret, None);
 
     match client.get_ip_protection().await {

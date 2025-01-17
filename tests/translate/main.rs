@@ -1,8 +1,24 @@
-mod test_config;
 use u_ali_sdk::translate::*;
 
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+pub struct AliConfig {
+    pub access_key_id: String,
+    pub access_key_secret: String,
+}
+
+impl AliConfig {
+    pub fn get_conf() -> Self {
+        let file_str = std::fs::read_to_string("tests/translate/config.toml").unwrap();
+        let conf = toml::from_str(&file_str).unwrap();
+
+        conf
+    }
+}
+
 fn get_trans_client() -> TransClient {
-    let conf = test_config::AliConfig::get_conf();
+    let conf = AliConfig::get_conf();
     TransClient::new(
         conf.access_key_id,
         conf.access_key_secret,
