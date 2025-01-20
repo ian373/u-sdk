@@ -232,3 +232,17 @@ fn check_stream_event_data_deserialize() {
     let data: StreamEventData = serde_json::from_str(json).unwrap();
     println!("{:#?}", data);
 }
+
+#[derive(Deserialize, Debug)]
+pub struct CheckBalanceResponse {
+    pub is_available: bool,
+    pub balance_infos: Vec<BalanceInfo>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BalanceInfo {
+    pub currency: String,
+    pub total_balance: String,
+    pub granted_balance: String,
+    pub topped_up_balance: String,
+}

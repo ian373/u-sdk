@@ -88,3 +88,18 @@ async fn chat_by_stream() {
 
     println!("=============\nresult: \n{}", s);
 }
+
+#[tokio::test]
+async fn check_balance_test() {
+    let token = get_deep_seek_key();
+    let client = u_ali_sdk::deep_seek::DeepSeek::new(&token);
+    let balance = client.check_balance().await;
+    match balance {
+        Ok(b) => {
+            println!("{:#?}", b);
+        }
+        Err(e) => {
+            println!("{:#?}", e);
+        }
+    }
+}

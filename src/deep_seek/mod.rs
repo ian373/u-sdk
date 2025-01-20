@@ -1,6 +1,6 @@
 pub mod types;
 
-use crate::deep_seek::types::{FixedParams, Role};
+use crate::deep_seek::types::{CheckBalanceResponse, FixedParams, Role};
 use async_stream::stream;
 use futures_util::{stream::StreamExt, Stream};
 use reqwest::StatusCode;
@@ -134,6 +134,28 @@ impl DeepSeek {
             .await
             .map_err(|e| e.to_string())?;
         Ok(response)
+    }
+
+    pub async fn check_balance(&self) -> Result<CheckBalanceResponse, String> {
+        let response = self
+            .client
+            .get(format!("{}/user/balance", BASE_URL))
+            .header("Accept", "application/json")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        match response.status() {
+            StatusCode::OK => {
+                let response = response
+                    .json::<CheckBalanceResponse>()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                Ok(response)
+            }
+            status => Err(format!("Request failed with status: {}", status)),
+        }
     }
 }
 
