@@ -1,6 +1,6 @@
 /target
 /Cargo.lock
 
-/tests/**/config.toml
+/*/**/config.toml
 
 /.idea
