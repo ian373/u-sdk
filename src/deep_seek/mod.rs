@@ -24,6 +24,18 @@ impl DeepSeek {
         }
     }
 
+    /// 多轮对话形式
+    ///
+    /// 发送的形式：
+    ///
+    /// ```json
+    /// // 第一条可以是prompt
+    /// {"content": "You are a helpful assistant", "role": "system" }
+    /// {"content": "Hi", "role": "user" }
+    ///
+    /// // 或者直接是user
+    /// {"content": "Hi", "role": "user" }
+    /// ```
     pub async fn chat(&mut self, msg_list: &[Message]) -> Result<ChatResponse, String> {
         check_msg_list(msg_list)?;
 
@@ -37,15 +49,7 @@ impl DeepSeek {
             fix_params: &self.fixed_params,
         };
 
-        let response = self
-            .client
-            .post(format!("{}/chat/completions", BASE_URL))
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&request_params)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-
+        let response = self.send(request_params).await?;
         match response.status() {
             StatusCode::OK => {
                 let response = response
@@ -72,15 +76,7 @@ impl DeepSeek {
             fix_params: &self.fixed_params,
         };
 
-        let response = self
-            .client
-            .post(format!("{}/chat/completions", BASE_URL))
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&request_params)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-
+        let response = self.send(request_params).await?;
         if !response.headers().contains_key("content-type")
             || !response.headers()["content-type"]
                 .to_str()
@@ -127,14 +123,27 @@ impl DeepSeek {
 
         Ok(Box::pin(s))
     }
+
+    async fn send(&self, params: RequestParams<'_>) -> Result<reqwest::Response, String> {
+        let response = self
+            .client
+            .post(format!("{}/chat/completions", BASE_URL))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&params)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(response)
+    }
 }
 
 fn check_msg_list(msg_list: &[Message]) -> Result<(), String> {
+    // 多轮对话的形式
+
     if msg_list.is_empty() {
         return Err("msg_list is empty".to_string());
-    } else if msg_list[0].role != Role::Assistant {
-        return Err("The first message role must be Assistant".to_string());
     } else if msg_list.last().unwrap().role != Role::User {
+        // 最后一条消息必须是 User
         return Err("The last message role must be User".to_string());
     }
 
