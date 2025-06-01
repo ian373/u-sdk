@@ -1,0 +1,16 @@
+# 全部文本文件统一为 LF 换行
+* text=auto eol=lf
+
+# 明确声明二进制文件类型
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.tar binary
