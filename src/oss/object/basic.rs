@@ -5,11 +5,11 @@
 use super::types_rs::*;
 use super::utils::partition_header;
 use crate::error::Error;
+use crate::oss::OSSClient;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use crate::oss::utils::{
-    get_content_md5, handle_response_status, into_request_header, SerializeToHashMap,
+    SerializeToHashMap, get_content_md5, handle_response_status, into_request_header,
 };
-use crate::oss::OSSClient;
 use crate::utils::common::gmt_format;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -351,7 +351,8 @@ impl OSSClient {
             quiet: is_quiet_resp,
             object: delete_objects,
         };
-        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req)?;
+        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req)
+            .map_err(|_| Error::AnyError("to string with root error".to_owned()))?;
 
         let mut canonical_header = BTreeMap::new();
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");

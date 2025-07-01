@@ -2,14 +2,14 @@
 //!
 //! [阿里云API文档](https://help.aliyun.com/zh/oss/developer-reference/bucket-operations/)
 
-use super::sign_v4::{HTTPVerb, SignV4Param};
-use super::utils::{handle_response_status, into_request_header, SerializeToHashMap};
 use super::OSSClient;
+use super::sign_v4::{HTTPVerb, SignV4Param};
+use super::utils::{SerializeToHashMap, handle_response_status, into_request_header};
 use crate::error::Error;
 use crate::utils::common::gmt_format;
 
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use url::Url;
 
@@ -219,7 +219,8 @@ impl OSSClient {
         header.insert("Date", &gmt);
         let header_map = into_request_header(header);
 
-        let rq_xml = quick_xml::se::to_string(&bucket_conf)?;
+        let rq_xml = quick_xml::se::to_string(&bucket_conf)
+            .map_err(|_| Error::AnyError("failed to serialize bucket configuration".to_owned()))?;
         // println!("rq_xml: {}", rq_xml);
         let resp = self
             .http_client
