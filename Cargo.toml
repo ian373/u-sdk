@@ -1,12 +1,13 @@
 [package]
 name = "u-sdk"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "SDKs for some applications"
 license = "MIT"
 repository = "https://github.com/ian373/u-sdk"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 email = []

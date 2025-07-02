@@ -1,6 +1,6 @@
 use futures_util::StreamExt;
 use serde::Deserialize;
-use u_ali_sdk::deep_seek::types::{Role, StreamEvent};
+use u_sdk::deep_seek::types::{Role, StreamEvent};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -21,10 +21,10 @@ fn get_key() {
 
 #[tokio::test]
 async fn chat() {
-    use u_ali_sdk::deep_seek::types::Message;
+    use u_sdk::deep_seek::types::Message;
 
     let token = get_deep_seek_key();
-    let mut client = u_ali_sdk::deep_seek::DeepSeek::new(&token);
+    let mut client = u_sdk::deep_seek::DeepSeek::new(&token);
     let mut msg_list = vec![
         Message {
             content: "You are a helpful assistant.".to_string(),
@@ -53,10 +53,10 @@ async fn chat() {
 
 #[tokio::test]
 async fn chat_by_stream() {
-    use u_ali_sdk::deep_seek::types::Message;
+    use u_sdk::deep_seek::types::Message;
 
     let token = get_deep_seek_key();
-    let mut client = u_ali_sdk::deep_seek::DeepSeek::new(&token);
+    let mut client = u_sdk::deep_seek::DeepSeek::new(&token);
     let msg_list = vec![
         Message {
             content: "You are a helpful assistant.".to_string(),
@@ -92,7 +92,7 @@ async fn chat_by_stream() {
 #[tokio::test]
 async fn check_balance_test() {
     let token = get_deep_seek_key();
-    let client = u_ali_sdk::deep_seek::DeepSeek::new(&token);
+    let client = u_sdk::deep_seek::DeepSeek::new(&token);
     let balance = client.check_balance().await;
     match balance {
         Ok(b) => {

@@ -1,4 +1,4 @@
-use u_ali_sdk::translate::*;
+use u_sdk::translate::*;
 
 use serde::Deserialize;
 

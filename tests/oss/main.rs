@@ -1,6 +1,6 @@
 use oss::object::types_rs::*;
 use std::collections::HashMap;
-use u_ali_sdk::oss;
+use u_sdk::oss;
 
 use serde::Deserialize;
 

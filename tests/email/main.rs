@@ -1,5 +1,5 @@
-use u_ali_sdk::email;
-use u_ali_sdk::error::Error;
+use u_sdk::email;
+use u_sdk::error::Error;
 
 use serde::Deserialize;
 

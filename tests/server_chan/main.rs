@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use toml::Table;
-use u_ali_sdk::server_chan::*;
+use u_sdk::server_chan::*;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
