@@ -8,6 +8,7 @@ repository = "https://github.com/ian373/u-sdk"
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 email = []
