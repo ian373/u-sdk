@@ -1,4 +1,2 @@
-token = "server chan token"
-
-server_chan3_uid = 1234
-server_chan3_send_key = "server chan send key"
+uid = 1234
+key = "server chan send key"
