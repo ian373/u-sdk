@@ -1,23 +1,37 @@
 //! 邮件推送sdk
 
-pub mod account;
-pub mod domain;
-pub mod ip_protection;
-pub mod send_email;
+mod account;
+pub use account::{DescAccountSummary, DescAccountSummaryBuilder, DescAccountSummaryResult};
 
-pub(crate) mod utils;
+mod domain;
+pub use domain::{QueryDomainByParam, QueryDomainByParamBuilder, QueryDomainByParamResult};
+
+mod ip_protection;
+pub use ip_protection::{GetIpProtection, GetIpProtectionBuilder, GetIpProtectionResult};
+
+mod send_email;
+pub use send_email::{SingleSendEmail, SingleSendEmailBuilder, SingleSendEmailResult};
+
+mod utils;
+
+mod error;
+pub use error::Error;
 
 pub(crate) const BASE_URL: &str = "https://dm.aliyuncs.com";
 
+use bon::bon;
 use std::collections::BTreeMap;
-pub struct EmailSdk {
+
+pub struct Client {
     // 公共参数固定不变的部分
     known_params: BTreeMap<String, String>,
     access_key_secret: String,
     http_client: reqwest::Client,
 }
 
-impl EmailSdk {
+#[bon]
+impl Client {
+    #[builder(on(String, into))]
     pub fn new(
         access_key_id: String,
         access_key_secret: String,
@@ -31,7 +45,7 @@ impl EmailSdk {
         map.insert("SignatureVersion".to_owned(), "1.0".to_owned());
 
         if let Some(r) = region_id {
-            map.insert("RegionId".to_owned(), r);
+            map.insert("RegionId".to_owned(), r.into());
         }
 
         Self {

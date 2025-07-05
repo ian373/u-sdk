@@ -1,19 +1,12 @@
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-
-use super::utils::sign_params;
-use super::{EmailSdk, BASE_URL};
-use crate::error::Error;
+use super::Error;
+use super::utils::{parse_json_response, sign_params};
+use super::{BASE_URL, Client};
 use crate::utils::common::{get_uuid, now_iso8601};
 
-#[derive(Serialize)]
-pub struct APIParams {
-    pub key_word: Option<String>,
-    pub page_no: Option<u32>,
-    pub page_size: Option<u16>,
-    pub status: Option<u8>,
-}
+use bon::Builder;
+use serde::{Deserialize, Serialize};
 
+//region response
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct QueryDomainByParamResult {
@@ -45,47 +38,54 @@ pub struct PerInfo {
     pub utc_create_time: u64,
     pub domain_record: String,
 }
+//endregion
 
-impl EmailSdk {
-    pub async fn query_domain_by_param(
-        &self,
-        api_params: APIParams,
-    ) -> Result<QueryDomainByParamResult, Error> {
-        let mut params_map: BTreeMap<String, String> = BTreeMap::new();
-        params_map.append(&mut self.known_params.clone());
-        params_map.insert("Timestamp".to_owned(), now_iso8601());
-        params_map.insert("SignatureNonce".to_owned(), get_uuid());
+#[derive(Builder, Serialize)]
+#[builder(on(String, into))]
+#[serde(rename_all = "PascalCase")]
+pub struct QueryDomainByParam<'a> {
+    #[builder(start_fn)]
+    #[serde(skip_serializing)]
+    client: &'a Client,
 
-        if api_params.key_word.is_some() {
-            params_map.insert(
-                "KeyWord".to_owned(),
-                api_params.key_word.as_ref().unwrap().to_string(),
-            );
-        }
-        if api_params.page_no.is_some() {
-            params_map.insert("PageNo".to_owned(), api_params.page_no.unwrap().to_string());
-        }
-        if api_params.page_size.is_some() {
-            params_map.insert(
-                "PageSize".to_owned(),
-                api_params.page_size.unwrap().to_string(),
-            );
-        }
-        if api_params.status.is_some() {
-            params_map.insert("Status".to_owned(), api_params.status.unwrap().to_string());
-        }
-        params_map.insert("Action".to_owned(), "QueryDomainByParam".to_owned());
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key_word: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page_no: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page_size: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<u8>,
+}
 
-        let signature = sign_params(&params_map, &self.access_key_secret);
-        params_map.insert("Signature".to_owned(), signature);
+impl Client {
+    pub fn query_domain_by_param(&self) -> QueryDomainByParamBuilder {
+        QueryDomainByParam::builder(self)
+    }
+}
+
+impl QueryDomainByParam<'_> {
+    pub async fn send(&self) -> Result<QueryDomainByParamResult, Error> {
+        let mut map = self.client.known_params.clone();
+        map.insert("Timestamp".to_owned(), now_iso8601());
+        map.insert("SignatureNonce".to_owned(), get_uuid());
+
+        let mut params_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        map.append(&mut params_map);
+
+        map.insert("Action".to_owned(), "QueryDomainByParam".to_owned());
+        let signature = sign_params(&map, &self.client.access_key_secret);
+        map.insert("Signature".to_owned(), signature);
 
         let resp = self
+            .client
             .http_client
             .post(BASE_URL)
-            .form(&params_map)
+            .form(&map)
             .send()
             .await?;
 
-        Ok(resp.json::<QueryDomainByParamResult>().await?)
+        let resp = parse_json_response(resp).await?;
+        Ok(resp)
     }
 }

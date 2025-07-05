@@ -1,5 +1,6 @@
-use base64::engine::{general_purpose, Engine};
-use percent_encoding::{percent_encode, AsciiSet, NON_ALPHANUMERIC};
+use super::Error;
+use base64::engine::{Engine, general_purpose};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_encode};
 use std::collections::BTreeMap;
 use url::form_urlencoded;
 
@@ -8,7 +9,10 @@ use crate::utils::common::sign_hmac_sha1;
 // 签名文档：https://help.aliyun.com/document_detail/29442.html
 
 // 定义一个函数，用于计算签名字符串
-pub fn sign_params(query_params: &BTreeMap<String, String>, access_key_secret: &str) -> String {
+pub(crate) fn sign_params(
+    query_params: &BTreeMap<String, String>,
+    access_key_secret: &str,
+) -> String {
     let canonical_query_string = form_urlencoded::Serializer::new(String::new())
         .extend_pairs(query_params)
         .finish()
@@ -44,4 +48,18 @@ fn sign_params_test() {
     let sign = sign_params(&map, "testsecret");
 
     assert_eq!(sign, "llJfXJjBW3OacrVgxxsITgYaYm0=")
+}
+
+pub(crate) async fn parse_json_response<T: serde::de::DeserializeOwned>(
+    resp: reqwest::Response,
+) -> Result<T, Error> {
+    let status = resp.status();
+
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(Error::API { code: status, body });
+    }
+
+    let json = resp.json::<T>().await?;
+    Ok(json)
 }

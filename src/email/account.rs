@@ -1,11 +1,12 @@
-use serde::Deserialize;
-use std::collections::BTreeMap;
-
-use super::utils::sign_params;
-use super::{EmailSdk, BASE_URL};
-use crate::error::Error;
+use super::Error;
+use super::utils::{parse_json_response, sign_params};
+use super::{BASE_URL, Client};
 use crate::utils::common::{get_uuid, now_iso8601};
 
+use bon::Builder;
+use serde::Deserialize;
+
+//region response
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct DescAccountSummaryResult {
@@ -21,26 +22,40 @@ pub struct DescAccountSummaryResult {
     pub templates: u32,
     pub user_status: u8,
 }
+//endregion
 
-impl EmailSdk {
-    pub async fn desc_account_summary(&self) -> Result<DescAccountSummaryResult, Error> {
-        let mut params_map: BTreeMap<String, String> = BTreeMap::new();
-        params_map.append(&mut self.known_params.clone());
+#[derive(Builder)]
+pub struct DescAccountSummary<'a> {
+    #[builder(start_fn)]
+    client: &'a Client,
+}
+
+impl Client {
+    pub fn desc_account_summary(&self) -> DescAccountSummaryBuilder {
+        DescAccountSummary::builder(self)
+    }
+}
+
+impl DescAccountSummary<'_> {
+    pub async fn send(&self) -> Result<DescAccountSummaryResult, Error> {
+        let mut params_map = self.client.known_params.clone();
+
         params_map.insert("Timestamp".to_owned(), now_iso8601());
         params_map.insert("SignatureNonce".to_owned(), get_uuid());
-
         params_map.insert("Action".to_owned(), "DescAccountSummary".to_owned());
 
-        let signature = sign_params(&params_map, &self.access_key_secret);
+        let signature = sign_params(&params_map, &self.client.access_key_secret);
         params_map.insert("Signature".to_owned(), signature);
 
         let resp = self
+            .client
             .http_client
             .post(BASE_URL)
             .form(&params_map)
             .send()
             .await?;
 
-        Ok(resp.json::<DescAccountSummaryResult>().await?)
+        let resp = parse_json_response(resp).await?;
+        Ok(resp)
     }
 }
