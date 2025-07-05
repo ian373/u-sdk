@@ -1,10 +1,10 @@
 //! [API 文档](https://help.aliyun.com/zh/oss/developer-reference/describeregions)
 
-use super::utils::{handle_response_status, into_request_header};
 use super::OSSClient;
+use super::utils::{handle_response_status, into_request_header};
 use crate::error::Error;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
-use crate::utils::common::gmt_format;
+use common_lib::helper::gmt_format;
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};

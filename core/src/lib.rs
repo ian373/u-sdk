@@ -23,7 +23,6 @@
 //!
 
 pub mod error;
-pub(crate) mod utils;
 
 #[cfg(feature = "email")]
 pub mod email;

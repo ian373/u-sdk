@@ -1,10 +1,9 @@
 use super::Error;
 use base64::engine::{Engine, general_purpose};
+use common_lib::helper::sign_hmac_sha1;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_encode};
 use std::collections::BTreeMap;
 use url::form_urlencoded;
-
-use crate::utils::common::sign_hmac_sha1;
 
 // 签名文档：https://help.aliyun.com/document_detail/29442.html
 

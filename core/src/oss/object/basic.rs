@@ -10,7 +10,7 @@ use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use crate::oss::utils::{
     SerializeToHashMap, get_content_md5, handle_response_status, into_request_header,
 };
-use crate::utils::common::gmt_format;
+use common_lib::helper::gmt_format;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

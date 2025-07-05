@@ -1,5 +1,5 @@
 use super::OSSClient;
-use crate::utils::common::gmt_format;
+use common_lib::helper::gmt_format;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -164,7 +164,7 @@ impl OSSClient {
         ));
         format!(
             "OSS4-HMAC-SHA256 Credential={}/{}/{}/oss/aliyun_v4_request, AdditionalHeaders=host, Signature={}",
-           self.access_key_id, date, sign_v4param.signing_region, signature
+            self.access_key_id, date, sign_v4param.signing_region, signature
         )
     }
 }

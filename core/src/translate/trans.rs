@@ -1,8 +1,8 @@
-use super::types_rs::*;
 use super::TransClient;
+use super::types_rs::*;
 use crate::error::Error;
-use crate::utils::common::into_header_map;
-use crate::utils::open_api_sign::{get_common_headers, SignParams};
+use common_lib::helper::into_header_map;
+use common_lib::open_api_sign::{SignParams, get_common_headers};
 
 use std::collections::BTreeMap;
 
@@ -37,7 +37,8 @@ impl TransClient {
         }
 
         let (common_headers, url_) =
-            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)?;
+            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)
+                .map_err(|e| Error::AnyError(format!("get_common_headers error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
         let resp = self
@@ -79,7 +80,8 @@ impl TransClient {
         };
 
         let (common_headers, url_) =
-            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)?;
+            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)
+                .map_err(|e| Error::AnyError(format!("get_common_headers error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
         let resp = self

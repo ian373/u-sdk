@@ -1,11 +1,11 @@
+use super::error::Error;
+use super::helper::now_iso8601;
+
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use time::OffsetDateTime;
 use url::Url;
-
-use super::common::now_iso8601;
-use crate::error::Error;
 
 // 阿里云签名文档链接：https://help.aliyun.com/zh/sdk/product-overview/v3-request-structure-and-signature
 
@@ -27,7 +27,7 @@ pub fn generate_can_uri(
     query_map: &BTreeMap<String, String>,
 ) -> Result<(String, String, String), Error> {
     let u = Url::parse_with_params(&format!("https://{}", host), query_map)
-        .map_err(|_| Error::AnyError("url parsed failed!".to_owned()))?;
+        .map_err(|_| Error::Common("url parsed failed!".to_owned()))?;
     let can_uri = u.path().to_owned();
     let can_query_str;
     if let Some(s) = u.query() {

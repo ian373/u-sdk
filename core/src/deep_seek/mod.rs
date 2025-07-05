@@ -2,7 +2,7 @@ pub mod types;
 
 use crate::deep_seek::types::{CheckBalanceResponse, FixedParams, Role};
 use async_stream::stream;
-use futures_util::{stream::StreamExt, Stream};
+use futures_util::{Stream, stream::StreamExt};
 use reqwest::StatusCode;
 use types::{ChatResponse, Message, RequestParams, StreamEvent, StreamEventData};
 
