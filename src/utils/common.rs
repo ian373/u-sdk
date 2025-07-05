@@ -6,11 +6,6 @@ use time::format_description::well_known::iso8601::{
 #[cfg(any(feature = "oss", feature = "email", feature = "translate"))]
 use time::OffsetDateTime;
 
-#[cfg(feature = "email")]
-pub fn get_uuid() -> String {
-    uuid::Uuid::new_v4().to_string()
-}
-
 #[cfg(feature = "oss")]
 pub fn gmt_format(date_time: &OffsetDateTime) -> String {
     use time::format_description::well_known::Rfc2822;

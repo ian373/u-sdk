@@ -1,7 +1,7 @@
 use super::Error;
 use super::utils::{parse_json_response, sign_params};
 use super::{BASE_URL, Client};
-use crate::utils::common::{get_uuid, now_iso8601};
+use crate::utils::common::now_iso8601;
 use bon::Builder;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -32,7 +32,10 @@ impl GetIpProtection<'_> {
         let mut params_map: BTreeMap<String, String> = BTreeMap::new();
         params_map.append(&mut self.client.known_params.clone());
         params_map.insert("Timestamp".to_owned(), now_iso8601());
-        params_map.insert("SignatureNonce".to_owned(), get_uuid());
+        params_map.insert(
+            "SignatureNonce".to_owned(),
+            uuid::Uuid::new_v4().to_string(),
+        );
 
         params_map.insert("Action".to_owned(), "GetIpProtection".to_owned());
 

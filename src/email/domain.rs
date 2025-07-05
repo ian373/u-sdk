@@ -1,7 +1,7 @@
 use super::Error;
 use super::utils::{parse_json_response, sign_params};
 use super::{BASE_URL, Client};
-use crate::utils::common::{get_uuid, now_iso8601};
+use crate::utils::common::now_iso8601;
 
 use bon::Builder;
 use serde::{Deserialize, Serialize};
@@ -68,7 +68,10 @@ impl QueryDomainByParam<'_> {
     pub async fn send(&self) -> Result<QueryDomainByParamResult, Error> {
         let mut map = self.client.known_params.clone();
         map.insert("Timestamp".to_owned(), now_iso8601());
-        map.insert("SignatureNonce".to_owned(), get_uuid());
+        map.insert(
+            "SignatureNonce".to_owned(),
+            uuid::Uuid::new_v4().to_string(),
+        );
 
         let mut params_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         map.append(&mut params_map);
