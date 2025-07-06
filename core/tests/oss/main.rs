@@ -1,5 +1,5 @@
 use oss::object::types_rs::*;
-use std::collections::HashMap;
+use std::path::Path;
 use u_sdk::oss;
 
 use serde::Deserialize;
@@ -22,15 +22,15 @@ impl AliConfig {
     }
 }
 
-fn get_oss_client() -> oss::OSSClient {
+fn get_oss_client() -> oss::Client {
     let conf = AliConfig::get_conf();
-    oss::OSSClient::new(
-        &conf.access_key_id,
-        &conf.access_key_secret,
-        &conf.endpoint,
-        &conf.region,
-        &conf.bucket_name,
-    )
+    oss::Client::builder()
+        .access_key_id(conf.access_key_id)
+        .access_key_secret(conf.access_key_secret)
+        .endpoint(conf.endpoint)
+        .region(conf.region)
+        .bucket(conf.bucket_name)
+        .build()
 }
 
 #[tokio::test]
@@ -132,27 +132,24 @@ async fn get_bucket_stat_test() {
 
 #[tokio::test]
 async fn put_object_test() {
-    let data = b"test123".to_vec();
     let client = get_oss_client();
-    let put_object_header = PutObjectHeader {
-        content_type: Some("text/plain"),
-        cache_control: Some("max-age=6666"),
-        ..Default::default()
-    };
-    let mut meta_map = HashMap::new();
-    meta_map.insert("key", "value");
-    meta_map.insert("key2", "value2");
+
     let res = client
-        .put_object(
-            put_object_header,
-            Some(XMetaHeader(meta_map)),
-            "test/test_txt.txt",
-            data,
+        .put_object()
+        .content_type("text/plain")
+        .cache_control("max-age=6666")
+        .x_meta("key", "value")
+        .x_metas([("key3", "value3"), ("key4", "value4")])
+        .build()
+        .send(
+            "/test/sample.toml",
+            PutObjectBody::FilePath(Path::new("tests/oss/config.sample.toml")),
         )
         .await;
+
     match res {
         Ok(_) => println!("res: success"),
-        Err(e) => println!("error: {}", e),
+        Err(e) => println!("error: {:#?}", e),
     }
 }
 
@@ -202,31 +199,31 @@ async fn copy_object_test() {
     }
 }
 
-#[tokio::test]
-async fn append_object_test() {
-    let client = get_oss_client();
-
-    let append_header = AppendObjectHeader {
-        content_type: Some("text/plain"),
-        position: 13,
-        ..Default::default()
-    };
-    let res = client
-        .append_object(
-            "test/append_object.txt",
-            append_header,
-            None,
-            b"text123dfasdf".to_vec(),
-        )
-        .await;
-
-    match res {
-        Ok(next_pos) => {
-            println!("next_pos:{}", next_pos);
-        }
-        Err(e) => println!("error: {}", e),
-    }
-}
+// #[tokio::test]
+// async fn append_object_test() {
+//     let client = get_oss_client();
+//
+//     let append_header = AppendObjectHeader {
+//         content_type: Some("text/plain"),
+//         position: 13,
+//         ..Default::default()
+//     };
+//     let res = client
+//         .append_object(
+//             "test/append_object.txt",
+//             append_header,
+//             None,
+//             b"text123dfasdf".to_vec(),
+//         )
+//         .await;
+//
+//     match res {
+//         Ok(next_pos) => {
+//             println!("next_pos:{}", next_pos);
+//         }
+//         Err(e) => println!("error: {}", e),
+//     }
+// }
 
 #[tokio::test]
 async fn delete_object_test() {

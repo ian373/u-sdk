@@ -5,52 +5,73 @@
 use super::types_rs::*;
 use super::utils::partition_header;
 use crate::error::Error;
-use crate::oss::OSSClient;
+use crate::oss::Client;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use crate::oss::utils::{
-    SerializeToHashMap, get_content_md5, handle_response_status, into_request_header,
+    SerializeToHashMap, compute_md5_from_file, get_content_md5, handle_response_status,
+    into_request_header, is_valid_object_name,
 };
 use common_lib::helper::gmt_format;
-
+use futures_util::TryFutureExt;
+use reqwest::Body;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use tokio_util::io::ReaderStream;
 
-/// Object基础操作
-impl OSSClient {
+impl<'a> PutObject<'a> {
     /// - `content_type`，不会进行MIME合法性检查
-    /// - `object_name`：不会进行合法性检查，遵守OSS的Object命名规则
+    /// - `object_name`：遵守OSS的Object命名规则，必须以`/`开头
     /// - `data`：如果需要创建文件夹，object_name以`/`结尾，`Vec`大小为0即可
     ///
     /// 上传成功后不会返回响应内容
-    pub async fn put_object(
-        &self,
-        put_bucket_header: PutObjectHeader<'_>,
-        x_meta_header: Option<XMetaHeader<'_>>,
-        object_name: &str,
-        data: Vec<u8>,
-    ) -> Result<(), Error> {
+    pub async fn send(&self, object_name: &'a str, object: PutObjectBody<'a>) -> Result<(), Error> {
+        if !is_valid_object_name(object_name) {
+            return Err(Error::AnyError(format!(
+                "object_name `{}` is invalid, please check it",
+                object_name
+            )));
+        }
+
+        let client = self.client;
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}/{}", // url不能添加`/`结尾，因为是否有`/`由object_name决定
-            self.bucket, self.endpoint, object_name
+            "https://{}.{}{}", // url不能添加`/`结尾，因为是否有`/`由object_name决定
+            client.bucket, client.endpoint, object_name
         ))
         .unwrap();
 
-        let mut req_header_map = put_bucket_header.serialize_to_hashmap()?;
+        let mut req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         // 添加api剩下的请求头
-        req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
-        req_header_map.insert("content-length".to_owned(), data.len().to_string());
+        match &object {
+            PutObjectBody::Bytes(bytes) => {
+                req_header_map.insert("content-md5".to_owned(), get_content_md5(bytes.as_slice()));
+                req_header_map.insert("content-length".to_owned(), bytes.len().to_string());
+            }
+            PutObjectBody::FilePath(path) => {
+                let file_size = std::fs::metadata(path)
+                    .map_err(|_| Error::AnyError("get file metadata error".to_owned()))?
+                    .len();
+                req_header_map.insert("content-length".to_owned(), file_size.to_string());
+                let md5_str = compute_md5_from_file(path)
+                    .map_err(|e| Error::AnyError(format!("compute md5 from file error: {}", e)))
+                    .await?;
+                req_header_map.insert("content-md5".to_owned(), md5_str);
+            }
+        }
         // 把需要签名的header和不需要签名的header分开
         let (sign_map, remaining_map) = partition_header(req_header_map);
 
-        // 创建CanonicalHeaders，把所有需要签名的header放到CanonicalHeaders中
+        // 创建CanonicalHeaders，把所有需要签名的header放到CanonicalHeader中
         let mut canonical_header = BTreeMap::new();
         canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        // 如果有x_meta_header，将其添加到canonical_header中参与签名
-        let meta_map = if let Some(m) = x_meta_header {
-            m.get_meta_map()
-        } else {
-            HashMap::new()
+        // 如果有x-meta-*，将其添加到canonical_header中参与签名
+        if !self.custom_metas.is_empty() {
+            let custom_meta_map = self
+                .custom_metas
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect::<HashMap<_, _>>();
+            canonical_header.extend(custom_meta_map);
         };
-        canonical_header.extend(meta_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
         canonical_header.insert("host", request_url.host_str().unwrap());
 
@@ -58,15 +79,15 @@ impl OSSClient {
         additional_header.insert("host");
         let now = time::OffsetDateTime::now_utc();
         let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
+            signing_region: &client.region,
             http_verb: HTTPVerb::Put,
             uri: &request_url,
-            bucket: Some(&self.bucket),
+            bucket: Some(&client.bucket),
             header_map: &canonical_header,
             additional_header: Some(&additional_header),
             date_time: &now,
         };
-        let authorization = self.sign_v4(sign_v4_param);
+        let authorization = client.sign_v4(sign_v4_param);
 
         // 把canonical_header转化为最终的header，补齐剩下的未参与签名计算的header
         // 包括：剩下必要的公共请求头，api header中的非签名字段
@@ -77,7 +98,18 @@ impl OSSClient {
         header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         let header_map = into_request_header(header);
 
-        let resp = self
+        let data = match object {
+            PutObjectBody::Bytes(bytes) => Body::from(bytes),
+            PutObjectBody::FilePath(path) => {
+                let file = tokio::fs::File::open(path)
+                    .await
+                    .map_err(|e| Error::AnyError(format!("open file error: {}", e)))?;
+                let stream = ReaderStream::new(file);
+                Body::wrap_stream(stream)
+            }
+        };
+
+        let resp = client
             .http_client
             .put(request_url)
             .headers(header_map)
@@ -88,6 +120,13 @@ impl OSSClient {
         let _ = handle_response_status(resp).await?;
 
         Ok(())
+    }
+}
+
+/// Object基础操作
+impl Client {
+    pub fn put_object(&self) -> PutObjectBuilder {
+        PutObject::builder(self)
     }
 
     /// 返回：
@@ -221,77 +260,77 @@ impl OSSClient {
 
     /// - 当创建一个新的Appendable Object的时候，`position`设为`0`
     /// - 如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
-    pub async fn append_object(
-        &self,
-        object_name: &str,
-        append_object_header: AppendObjectHeader<'_>,
-        x_meta_header: Option<XMetaHeader<'_>>,
-        data: Vec<u8>,
-    ) -> Result<u64, Error> {
-        let request_url = url::Url::parse_with_params(
-            &format!("https://{}.{}/{}", self.bucket, self.endpoint, object_name),
-            [
-                ("append", ""),
-                ("position", &append_object_header.position.to_string()),
-            ],
-        )
-        .unwrap();
-        let mut req_header_map = append_object_header.serialize_to_hashmap()?;
-        req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
-        req_header_map.insert("content-length".to_owned(), data.len().to_string());
-        let (sign_map, remaining_map) = partition_header(req_header_map);
-
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        let meta_map = if let Some(m) = x_meta_header {
-            m.get_meta_map()
-        } else {
-            HashMap::with_capacity(0)
-        };
-        canonical_header.extend(meta_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
-
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Post,
-            uri: &request_url,
-            bucket: Some(&self.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        let header_map = into_request_header(header);
-
-        let mut resp = self
-            .http_client
-            .post(request_url)
-            .headers(header_map)
-            .body(data)
-            .send()
-            .await?;
-
-        let next_position = resp.headers_mut().remove("x-oss-next-append-position");
-        let _ = handle_response_status(resp).await?;
-        let next_position = next_position
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .parse::<u64>()
-            .unwrap();
-
-        Ok(next_position)
-    }
+    // pub async fn append_object(
+    //     &self,
+    //     object_name: &str,
+    //     append_object_header: AppendObjectHeader<'_>,
+    //     x_meta_header: Option<XMetaHeader<'_>>,
+    //     data: Vec<u8>,
+    // ) -> Result<u64, Error> {
+    //     let request_url = url::Url::parse_with_params(
+    //         &format!("https://{}.{}/{}", self.bucket, self.endpoint, object_name),
+    //         [
+    //             ("append", ""),
+    //             ("position", &append_object_header.position.to_string()),
+    //         ],
+    //     )
+    //     .unwrap();
+    //     let mut req_header_map = append_object_header.serialize_to_hashmap()?;
+    //     req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
+    //     req_header_map.insert("content-length".to_owned(), data.len().to_string());
+    //     let (sign_map, remaining_map) = partition_header(req_header_map);
+    //
+    //     let mut canonical_header = BTreeMap::new();
+    //     canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    //     let meta_map = if let Some(m) = x_meta_header {
+    //         m.get_meta_map()
+    //     } else {
+    //         HashMap::with_capacity(0)
+    //     };
+    //     canonical_header.extend(meta_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    //     canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+    //     canonical_header.insert("host", request_url.host_str().unwrap());
+    //
+    //     let mut additional_header = BTreeSet::new();
+    //     additional_header.insert("host");
+    //     let now = time::OffsetDateTime::now_utc();
+    //     let sign_v4_param = SignV4Param {
+    //         signing_region: &self.region,
+    //         http_verb: HTTPVerb::Post,
+    //         uri: &request_url,
+    //         bucket: Some(&self.bucket),
+    //         header_map: &canonical_header,
+    //         additional_header: Some(&additional_header),
+    //         date_time: &now,
+    //     };
+    //     let authorization = self.sign_v4(sign_v4_param);
+    //
+    //     let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
+    //     header.insert("Authorization", &authorization);
+    //     let gmt = gmt_format(&now);
+    //     header.insert("Date", &gmt);
+    //     header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    //     let header_map = into_request_header(header);
+    //
+    //     let mut resp = self
+    //         .http_client
+    //         .post(request_url)
+    //         .headers(header_map)
+    //         .body(data)
+    //         .send()
+    //         .await?;
+    //
+    //     let next_position = resp.headers_mut().remove("x-oss-next-append-position");
+    //     let _ = handle_response_status(resp).await?;
+    //     let next_position = next_position
+    //         .unwrap()
+    //         .to_str()
+    //         .unwrap()
+    //         .parse::<u64>()
+    //         .unwrap();
+    //
+    //     Ok(next_position)
+    // }
 
     /// 无论object是否存在都会执行删除操作并返回成功
     pub async fn delete_object(&self, object_name: &str) -> Result<(), Error> {

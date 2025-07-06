@@ -1,4 +1,4 @@
-use super::OSSClient;
+use super::Client;
 use common_lib::helper::gmt_format;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
@@ -114,7 +114,7 @@ pub(crate) struct SignV4Param<'a> {
     pub date_time: &'a OffsetDateTime,
 }
 
-impl OSSClient {
+impl Client {
     /// verb: GET, PUT, POST, DELETE...
     /// uri like: "/", "/bucket/", "/bucket/object"; query: "xxx?xxx=xxx&xxx=xxx"
     pub(crate) fn sign_v4(&self, sign_v4param: SignV4Param) -> String {

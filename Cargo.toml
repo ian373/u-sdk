@@ -23,3 +23,6 @@ time = { version = "^0.3.41", features = ["formatting"] }
 uuid = { version = "^1.17.0", features = ["v4"] }
 quick-xml = { version = "^0.38.0", features = ["serialize"] }
 bon = "^3"
+tokio = { version = "1.46.1", features = ["fs"] }
+tokio-util = { version = "0.7.15", features = ["io"] }
+regex = "1.11.1"

@@ -2,7 +2,7 @@
 //!
 //! [阿里云API文档](https://help.aliyun.com/zh/oss/developer-reference/bucket-operations/)
 
-use super::OSSClient;
+use super::Client;
 use super::sign_v4::{HTTPVerb, SignV4Param};
 use super::utils::{SerializeToHashMap, handle_response_status, into_request_header};
 use crate::error::Error;
@@ -180,7 +180,7 @@ pub struct BucketStat {
 // endregion: --- get bucket stat
 
 /// bucket相关API
-impl OSSClient {
+impl Client {
     pub async fn put_bucket(
         &self,
         bucket_name: &str,
@@ -286,7 +286,7 @@ impl OSSClient {
         Ok(res)
     }
 
-    /// - `bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取指定的`bucket`的信息
+    /// - `bucket`: 如果为`None`，则获取[`Client`]中的`bucket`信息，否则获取指定的`bucket`的信息
     pub async fn get_bucket_info(&self) -> Result<BucketInfo, Error> {
         let request_url = Url::parse_with_params(
             &format!("https://{}.{}", self.bucket, self.endpoint),
@@ -328,7 +328,7 @@ impl OSSClient {
         Ok(res)
     }
 
-    /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
+    /// - `other_bucket`: 如果为`None`，则获取[`Client`]中的`bucket`信息，否则获取`other_bucket`的信息
     pub async fn get_bucket_location(&self) -> Result<String, Error> {
         let request_url = Url::parse_with_params(
             &format!("https://{}.{}", self.bucket, self.endpoint),
@@ -369,7 +369,7 @@ impl OSSClient {
         Ok(res.field)
     }
 
-    /// - `other_bucket`: 如果为`None`，则获取[`OSSClient`]中的`bucket`信息，否则获取`other_bucket`的信息
+    /// - `other_bucket`: 如果为`None`，则获取[`Client`]中的`bucket`信息，否则获取`other_bucket`的信息
     pub async fn get_bucket_stat(&self) -> Result<BucketStat, Error> {
         let request_url = Url::parse_with_params(
             &format!("https://{}.{}", self.bucket, self.endpoint),

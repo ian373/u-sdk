@@ -1,4 +1,4 @@
-use super::OSSClient;
+use super::Client;
 use super::sign_v4::{HTTPVerb, SignV4Param};
 use super::utils::{SerializeToHashMap, handle_response_status, into_request_header};
 use crate::error::Error;
@@ -69,7 +69,7 @@ pub struct Bucket {
 // endregion: --- ListBucketResult
 
 /// service API
-impl OSSClient {
+impl Client {
     pub async fn list_buckets(
         &self,
         x_oss_resource_group_id: Option<&str>,

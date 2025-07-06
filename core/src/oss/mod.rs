@@ -17,7 +17,9 @@ pub mod service;
 pub(crate) mod sign_v4;
 pub(crate) mod utils;
 
-pub struct OSSClient {
+use bon::bon;
+
+pub struct Client {
     access_key_id: String,
     access_key_secret: String,
     endpoint: String,
@@ -27,21 +29,23 @@ pub struct OSSClient {
 }
 
 /// 创建oss客户端
-impl OSSClient {
+#[bon]
+impl Client {
     /// region和endpoint：<https://help.aliyun.com/zh/oss/user-guide/regions-and-endpoints>
+    #[builder(on(String, into))]
     pub fn new(
-        access_key_id: &str,
-        access_key_secret: &str,
-        endpoint: &str,
-        region: &str,
-        bucket: &str,
+        access_key_id: String,
+        access_key_secret: String,
+        endpoint: String,
+        region: String,
+        bucket: String,
     ) -> Self {
-        OSSClient {
-            access_key_id: access_key_id.to_owned(),
-            access_key_secret: access_key_secret.to_owned(),
-            endpoint: endpoint.to_owned(),
-            region: region.to_owned(),
-            bucket: bucket.to_owned(),
+        Self {
+            access_key_id,
+            access_key_secret,
+            endpoint,
+            region,
+            bucket,
             http_client: reqwest::Client::new(),
         }
     }

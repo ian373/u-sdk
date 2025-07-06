@@ -1,6 +1,6 @@
 //! [API 文档](https://help.aliyun.com/zh/oss/developer-reference/describeregions)
 
-use super::OSSClient;
+use super::Client;
 use super::utils::{handle_response_status, into_request_header};
 use crate::error::Error;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
@@ -26,7 +26,7 @@ pub struct RegionInfo {
 }
 
 /// region API
-impl OSSClient {
+impl Client {
     /// - `region`: 如果为`None`，则查询所有支持地域对应的Endpoint信息
     pub async fn describe_regions(&self, region: Option<&str>) -> Result<RegionInfoList, Error> {
         let request_url = Url::parse_with_params(

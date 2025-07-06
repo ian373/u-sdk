@@ -12,7 +12,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 email = []
-oss = ["dep:quick-xml"]
+oss = ["dep:quick-xml", "dep:tokio", "dep:tokio-util", "dep:regex", "reqwest/stream"]
 # 机器翻译
 translate = []
 server_chan = []
@@ -40,6 +40,9 @@ time = { workspace = true }
 uuid = { workspace = true }
 quick-xml = { workspace = true, optional = true }
 bon = { workspace = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { version = "^1.45.1", features = ["full"] }
