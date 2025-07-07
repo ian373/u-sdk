@@ -20,9 +20,11 @@ impl<'a> PutObject<'a> {
     /// - `content_type`，不会进行MIME合法性检查
     /// - `object_name`：遵守OSS的Object命名规则，必须以`/`开头
     /// - `data`：如果需要创建文件夹，object_name以`/`结尾，`Vec`大小为0即可
-    ///
-    /// 上传成功后不会返回响应内容
-    pub async fn send(&self, object_name: &'a str, object: PutObjectBody<'a>) -> Result<(), Error> {
+    pub async fn send(
+        &self,
+        object_name: &'a str,
+        object: PutObjectBody<'a>,
+    ) -> Result<PutObjectResponseHeader, Error> {
         if !is_valid_object_name(object_name) {
             return Err(Error::AnyError(format!(
                 "object_name `{}` is invalid, please check it",
@@ -88,9 +90,35 @@ impl<'a> PutObject<'a> {
             .send()
             .await?;
 
-        let _ = handle_response_status(resp).await?;
+        if !resp.status().is_success() {
+            return Err(Error::RequestAPIFailed {
+                status: resp.status().to_string(),
+                text: resp.text().await?,
+            });
+        }
 
-        Ok(())
+        let header = resp.headers();
+        let content_md5 = header
+            .get("Content-MD5")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let x_oss_hash_crc64ecma = header
+            .get("x-oss-hash-crc64ecma")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let x_oss_version_id = header
+            .get("x-oss-version-id")
+            .map(|v| v.to_str().unwrap().to_owned());
+
+        Ok(PutObjectResponseHeader {
+            content_md5,
+            x_oss_hash_crc64ecma,
+            x_oss_version_id,
+        })
     }
 }
 

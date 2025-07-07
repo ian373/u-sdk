@@ -72,6 +72,13 @@ pub enum PutObjectBody<'a> {
     Bytes(Vec<u8>),
     FilePath(&'a Path),
 }
+
+#[derive(Debug)]
+pub struct PutObjectResponseHeader {
+    pub content_md5: String,
+    pub x_oss_hash_crc64ecma: String,
+    pub x_oss_version_id: Option<String>,
+}
 // endregion: --- pub object
 
 // region:    --- get object

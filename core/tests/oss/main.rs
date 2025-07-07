@@ -148,8 +148,8 @@ async fn put_object_test() {
         .await;
 
     match res {
-        Ok(_) => println!("res: success"),
-        Err(e) => println!("error: {:#?}", e),
+        Ok(h) => println!("[success]\n{:#?}", h),
+        Err(e) => println!("[error]\n{:#?}", e),
     }
 }
 
