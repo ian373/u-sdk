@@ -5,7 +5,6 @@ use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use base64::{Engine, engine::general_purpose};
 use common_lib::helper::gmt_format;
 use md5::{Digest, Md5};
-use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -87,21 +86,67 @@ pub(crate) async fn compute_md5_from_file(path: &Path) -> Result<String, Error> 
     Ok(general_purpose::STANDARD.encode(result))
 }
 
-pub(crate) fn is_valid_object_name(name: &str) -> bool {
-    let re = Regex::new(r"^/[^/]+(?:/[^/]+)*/?$").unwrap();
-    re.is_match(name)
+pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
+    // 1. 必须以 '/' 开头
+    if !name.starts_with('/') {
+        return Err(Error::AnyError(format!(
+            "object_name `{}` is invalid: must start with `/`",
+            name
+        )));
+    }
+    // 2. 不能仅为根路径 "/"
+    if name == "/" {
+        return Err(Error::AnyError(format!(
+            "object_name `{}` is invalid: root `/` not allowed",
+            name
+        )));
+    }
+
+    // 按照 '/' 拆分，第一段必然是空，最后一段如果有单个 '/' 就是空
+    let parts: Vec<&str> = name.split('/').collect();
+    let last = parts.len() - 1;
+
+    for (i, seg) in parts.iter().enumerate() {
+        if i == 0 {
+            // skip leading empty before the first '/'
+            continue;
+        }
+        if i == last && seg.is_empty() {
+            // allow single trailing slash => last segment empty
+            continue;
+        }
+        // 以下任何情况都算非法
+        if seg.is_empty() {
+            return Err(Error::AnyError(format!(
+                "object_name `{}` is invalid: empty segment at position {}",
+                name, i
+            )));
+        }
+        if *seg == "." || *seg == ".." {
+            return Err(Error::AnyError(format!(
+                "object_name `{}` is invalid: segment `{}` not allowed",
+                name, seg
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 #[test]
 fn validate_object_name_test() {
-    assert!(is_valid_object_name("/foo"));
-    assert!(is_valid_object_name("/foo/"));
-    assert!(is_valid_object_name("/foo/bar"));
-    assert!(is_valid_object_name("/foo/bar/"));
-    assert!(!is_valid_object_name("foo"));
-    assert!(!is_valid_object_name("/"));
-    assert!(!is_valid_object_name("//foo"));
-    assert!(!is_valid_object_name("/foo//bar"));
+    assert!(validate_object_name("/foo").is_ok());
+    assert!(validate_object_name("/foo/").is_ok());
+    assert!(validate_object_name("/foo/bar").is_ok());
+    assert!(validate_object_name("/foo/bar/").is_ok());
+
+    assert!(validate_object_name("foo").is_err(),);
+    assert!(validate_object_name("/").is_err());
+    assert!(validate_object_name("//foo").is_err());
+    assert!(validate_object_name("/foo//bar").is_err());
+    assert!(validate_object_name("/foo/../bar").is_err());
+    assert!(validate_object_name("/foo/./bar").is_err(),);
+    assert!(validate_object_name("/foo/bar//").is_err());
 }
 
 pub(crate) fn get_request_header(

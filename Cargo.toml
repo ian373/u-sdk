@@ -25,5 +25,4 @@ quick-xml = { version = "^0.38.0", features = ["serialize"] }
 bon = "^3"
 tokio = { version = "1.46.1", features = ["fs"] }
 tokio-util = { version = "0.7.15", features = ["io"] }
-regex = "1.11.1"
 bytes = "1.10.1"

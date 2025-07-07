@@ -8,7 +8,7 @@ use crate::oss::Client;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use crate::oss::utils::{
     SerializeToHashMap, compute_md5_from_file, get_content_md5, get_request_header,
-    handle_response_status, into_request_header, is_valid_object_name,
+    handle_response_status, into_request_header, validate_object_name,
 };
 use bytes::Bytes;
 use common_lib::helper::gmt_format;
@@ -28,12 +28,7 @@ impl<'a> PutObject<'a> {
         object_name: &'a str,
         object: PutObjectBody<'a>,
     ) -> Result<PutObjectResponseHeader, Error> {
-        if !is_valid_object_name(object_name) {
-            return Err(Error::AnyError(format!(
-                "object_name `{}` is invalid, please check it",
-                object_name
-            )));
-        }
+        validate_object_name(object_name)?;
 
         let client = self.client;
         let request_url = url::Url::parse(&format!(
@@ -186,12 +181,7 @@ impl GetObject<'_> {
         &self,
         object_name: &str,
     ) -> Result<(reqwest::Response, GetObjectResponseHeader), Error> {
-        if !is_valid_object_name(object_name) {
-            return Err(Error::AnyError(format!(
-                "object_name `{}` is invalid, please check it",
-                object_name
-            )));
-        }
+        validate_object_name(object_name)?;
 
         let client = self.client;
         let request_url = url::Url::parse(&format!(
