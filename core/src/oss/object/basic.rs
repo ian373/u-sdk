@@ -67,7 +67,7 @@ impl<'a> PutObject<'a> {
             req_header_map.extend(custom_meta_map);
         };
 
-        let header_map = get_request_header(client, req_header_map, &request_url);
+        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Put);
 
         let data = match object {
             PutObjectBody::Bytes(bytes) => Body::from(bytes),
@@ -94,58 +94,39 @@ impl<'a> PutObject<'a> {
     }
 }
 
-/// Object基础操作
-impl Client {
-    pub fn put_object(&self) -> PutObjectBuilder {
-        PutObject::builder(self)
-    }
-
+impl GetObject<'_> {
     /// 返回：
     /// - `Vec<u8>`：文件数据
     /// - `HashMap<String, String>`：所有响应头
-    pub async fn get_object(
+    pub async fn send(
         &self,
-        get_object_header: GetObjectHeader<'_>,
         object_name: &str,
     ) -> Result<(Vec<u8>, HashMap<String, String>), Error> {
+        if !is_valid_object_name(object_name) {
+            return Err(Error::AnyError(format!(
+                "object_name `{}` is invalid, please check it",
+                object_name
+            )));
+        }
+
+        let client = self.client;
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}/{}",
-            self.bucket, self.endpoint, object_name
+            "https://{}.{}{}",
+            client.bucket, client.endpoint, object_name
         ))
         .unwrap();
 
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
+        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
 
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Get,
-            uri: &request_url,
-            bucket: Some(&self.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
+        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Get);
 
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        let req_header_map = get_object_header.serialize_to_hashmap()?;
-        header.extend(req_header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let header_map = into_request_header(header);
-
-        let resp = self
+        let resp = client
             .http_client
             .get(request_url)
             .headers(header_map)
             .send()
             .await?;
+
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().await?;
@@ -162,6 +143,17 @@ impl Client {
         let data = resp.bytes().await?.to_vec();
 
         Ok((data, resp_header))
+    }
+}
+
+/// Object基础操作
+impl Client {
+    pub fn put_object(&self) -> PutObjectBuilder {
+        PutObject::builder(self)
+    }
+
+    pub fn get_object(&self) -> GetObjectBuilder {
+        GetObject::builder(self)
     }
 
     /// - 不会对参数的bucket，endpoint，object_name，region进行合法性检查，需要自行保证

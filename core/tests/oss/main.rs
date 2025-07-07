@@ -157,12 +157,7 @@ async fn put_object_test() {
 async fn get_object_test() {
     let client = get_oss_client();
 
-    let c_header = GetObjectHeader {
-        range: Some("bytes=0-4"),
-        ..Default::default()
-    };
-
-    let res = client.get_object(c_header, "test/test_txt.txt").await;
+    let res = client.get_object().build().send("/test/sample.toml").await;
 
     match res {
         Ok((_data, header)) => {

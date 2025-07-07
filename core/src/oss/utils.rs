@@ -108,6 +108,7 @@ pub(crate) fn get_request_header(
     client: &Client,
     req_header_map: HashMap<String, String>,
     request_url: &Url,
+    http_verb: HTTPVerb,
 ) -> HeaderMap {
     // 把需要签名的header和不需要签名的header分开
     let (sign_map, remaining_map) = partition_header(req_header_map);
@@ -124,7 +125,7 @@ pub(crate) fn get_request_header(
     let now = time::OffsetDateTime::now_utc();
     let sign_v4_param = SignV4Param {
         signing_region: &client.region,
-        http_verb: HTTPVerb::Put,
+        http_verb,
         uri: request_url,
         bucket: Some(&client.bucket),
         header_map: &canonical_header,

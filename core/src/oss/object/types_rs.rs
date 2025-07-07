@@ -76,24 +76,28 @@ pub enum PutObjectBody<'a> {
 
 // region:    --- get object
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Default)]
+#[derive(Builder, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct GetObjectHeader<'a> {
-    pub response_content_type: Option<&'a str>,
-    pub response_content_language: Option<&'a str>,
-    pub response_expires: Option<&'a str>,
-    pub response_cache_control: Option<&'a str>,
-    pub response_content_disposition: Option<&'a str>,
-    pub response_content_encoding: Option<&'a str>,
-    pub range: Option<&'a str>,
-    pub if_modified_since: Option<&'a str>,
-    pub if_unmodified_since: Option<&'a str>,
-    pub if_match: Option<&'a str>,
-    pub if_none_match: Option<&'a str>,
-    pub accept_encoding: Option<&'a str>,
-}
+pub struct GetObject<'a> {
+    #[builder(start_fn)]
+    #[serde(skip_serializing)]
+    pub(crate) client: &'a Client,
 
-impl SerializeToHashMap for GetObjectHeader<'_> {}
+    // 请求头
+    range: Option<&'a str>,
+    if_modified_since: Option<&'a str>,
+    if_unmodified_since: Option<&'a str>,
+    if_match: Option<&'a str>,
+    if_none_match: Option<&'a str>,
+    accept_encoding: Option<&'a str>,
+
+    // 请求参数
+    response_content_language: Option<&'a str>,
+    response_expires: Option<&'a str>,
+    response_cache_control: Option<&'a str>,
+    response_content_disposition: Option<&'a str>,
+    response_content_encoding: Option<&'a str>,
+}
 // endregion: --- get object
 
 // region:    --- copy object
