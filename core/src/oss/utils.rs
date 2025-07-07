@@ -58,13 +58,14 @@ where
     }
 }
 
-// 用 16KB 缓冲流式读文件并计算MD5
+// 用 buffer 读文件并计算MD5
 pub(crate) async fn compute_md5_from_file(path: &Path) -> Result<String, Error> {
     let mut file = tokio::fs::File::open(path)
         .await
         .map_err(|e| Error::AnyError(format!("open file error: {}", e)))?;
     let mut hasher = Md5::new();
-    let mut buf = [0u8; 16 * 1024]; // 16 KB
+    // 放到堆上并初始化
+    let mut buf = vec![0u8; 64 * 1024]; // 64KB buffer
 
     loop {
         let n = file
