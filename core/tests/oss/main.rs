@@ -1,3 +1,4 @@
+use futures_util::StreamExt;
 use oss::object::types_rs::*;
 use std::path::Path;
 use u_sdk::oss;
@@ -157,11 +158,61 @@ async fn put_object_test() {
 async fn get_object_test() {
     let client = get_oss_client();
 
-    let res = client.get_object().build().send("/test/sample.toml").await;
+    let res = client
+        .get_object()
+        .build()
+        .receive_bytes("/test/sample.toml")
+        .await;
 
     match res {
-        Ok((_data, header)) => {
-            println!("response_header:{:#?}", header);
+        Ok((data, header)) => {
+            println!("[success] header: {:#?}", header);
+            println!("[success] data: {}", String::from_utf8_lossy(&data));
+        }
+        Err(e) => println!("error: {}", e),
+    }
+}
+
+#[tokio::test]
+async fn get_object_by_download_test() {
+    let client = get_oss_client();
+
+    let res = client
+        .get_object()
+        .build()
+        .download_to_file(
+            "/test/sample.toml",
+            Path::new("tests/oss/sample_download.toml"),
+        )
+        .await;
+
+    match res {
+        Ok(header) => println!("[success] header: {:#?}", header),
+        Err(e) => println!("error: {}", e),
+    }
+}
+
+#[tokio::test]
+async fn get_object_by_stream_test() {
+    let client = get_oss_client();
+
+    let res = client
+        .get_object()
+        .build()
+        .receive_bytes_stream("/test/sample.toml")
+        .await;
+
+    match res {
+        Ok((mut stream, header)) => {
+            println!("[success] header: {:#?}", header);
+            let mut buf = String::new();
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(data) => buf.push_str(&String::from_utf8_lossy(&data)),
+                    Err(e) => println!("stream error: {}", e),
+                }
+            }
+            println!("[success] data: {}", buf);
         }
         Err(e) => println!("error: {}", e),
     }

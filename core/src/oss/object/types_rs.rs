@@ -105,6 +105,13 @@ pub struct GetObject<'a> {
     response_content_disposition: Option<&'a str>,
     response_content_encoding: Option<&'a str>,
 }
+
+#[derive(Debug)]
+pub struct GetObjectResponseHeader {
+    pub x_oss_server_side_encryption: Option<String>,
+    pub x_oss_tagging_count: Option<String>,
+    pub x_oss_expiration: Option<String>,
+}
 // endregion: --- get object
 
 // region:    --- copy object

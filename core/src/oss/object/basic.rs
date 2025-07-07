@@ -10,10 +10,13 @@ use crate::oss::utils::{
     SerializeToHashMap, compute_md5_from_file, get_content_md5, get_request_header,
     handle_response_status, into_request_header, is_valid_object_name,
 };
+use bytes::Bytes;
 use common_lib::helper::gmt_format;
-use futures_util::TryFutureExt;
+use futures_util::{Stream, StreamExt};
 use reqwest::Body;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::Path;
+use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 
 impl<'a> PutObject<'a> {
@@ -52,9 +55,7 @@ impl<'a> PutObject<'a> {
                     .map_err(|_| Error::AnyError("get file metadata error".to_owned()))?
                     .len();
                 req_header_map.insert("content-length".to_owned(), file_size.to_string());
-                let md5_str = compute_md5_from_file(path)
-                    .map_err(|e| Error::AnyError(format!("compute md5 from file error: {}", e)))
-                    .await?;
+                let md5_str = compute_md5_from_file(path).await?;
                 req_header_map.insert("content-md5".to_owned(), md5_str);
             }
         }
@@ -126,10 +127,65 @@ impl GetObject<'_> {
     /// 返回：
     /// - `Vec<u8>`：文件数据
     /// - `HashMap<String, String>`：所有响应头
-    pub async fn send(
+    pub async fn receive_bytes(
         &self,
         object_name: &str,
-    ) -> Result<(Vec<u8>, HashMap<String, String>), Error> {
+    ) -> Result<(Bytes, GetObjectResponseHeader), Error> {
+        let (resp, response_header) = self.get_response(object_name).await?;
+        let data = resp
+            .bytes()
+            .await
+            .map_err(|e| Error::AnyError(format!("get object bytes error: {}", e)))?;
+
+        Ok((data, response_header))
+    }
+
+    pub async fn receive_bytes_stream(
+        &self,
+        object_name: &str,
+    ) -> Result<
+        (
+            impl Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>> + use<>,
+            GetObjectResponseHeader,
+        ),
+        Error,
+    > {
+        let (resp, response_header) = self.get_response(object_name).await?;
+
+        let byte_stream = resp
+            .bytes_stream()
+            .map(|item| item.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>));
+
+        Ok((byte_stream, response_header))
+    }
+
+    pub async fn download_to_file(
+        &self,
+        object_name: &str,
+        file_path: &Path,
+    ) -> Result<GetObjectResponseHeader, Error> {
+        let (mut resp, response_header) = self.get_response(object_name).await?;
+
+        let mut file = tokio::fs::File::create(file_path)
+            .await
+            .map_err(|e| Error::AnyError(format!("create file error: {}", e)))?;
+
+        while let Some(chunk) = resp.chunk().await? {
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| Error::AnyError(format!("write file error: {}", e)))?;
+        }
+        file.flush()
+            .await
+            .map_err(|e| Error::AnyError(format!("flush file error: {}", e)))?;
+
+        Ok(response_header)
+    }
+
+    async fn get_response(
+        &self,
+        object_name: &str,
+    ) -> Result<(reqwest::Response, GetObjectResponseHeader), Error> {
         if !is_valid_object_name(object_name) {
             return Err(Error::AnyError(format!(
                 "object_name `{}` is invalid, please check it",
@@ -163,14 +219,25 @@ impl GetObject<'_> {
                 text,
             });
         }
-        let resp_header = resp
-            .headers()
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
-            .collect();
-        let data = resp.bytes().await?.to_vec();
 
-        Ok((data, resp_header))
+        let header = resp.headers();
+        let x_oss_server_side_encryption = header
+            .get("x-oss-server-side-encryption")
+            .map(|v| v.to_str().unwrap().to_owned());
+        let x_oss_tagging_count = header
+            .get("x-oss-tagging-count")
+            .map(|v| v.to_str().unwrap().to_owned());
+        let x_oss_expiration = header
+            .get("x-oss-expiration")
+            .map(|v| v.to_str().unwrap().to_owned());
+
+        let response_header = GetObjectResponseHeader {
+            x_oss_server_side_encryption,
+            x_oss_tagging_count,
+            x_oss_expiration,
+        };
+
+        Ok((resp, response_header))
     }
 }
 
