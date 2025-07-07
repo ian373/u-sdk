@@ -3,13 +3,12 @@
 //! [官方文档](https://help.aliyun.com/zh/oss/developer-reference/basic-operations-1/)
 
 use super::types_rs::*;
-use super::utils::partition_header;
 use crate::error::Error;
 use crate::oss::Client;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use crate::oss::utils::{
-    SerializeToHashMap, compute_md5_from_file, get_content_md5, handle_response_status,
-    into_request_header, is_valid_object_name,
+    SerializeToHashMap, compute_md5_from_file, get_content_md5, get_request_header,
+    handle_response_status, into_request_header, is_valid_object_name,
 };
 use common_lib::helper::gmt_format;
 use futures_util::TryFutureExt;
@@ -57,46 +56,18 @@ impl<'a> PutObject<'a> {
                 req_header_map.insert("content-md5".to_owned(), md5_str);
             }
         }
-        // 把需要签名的header和不需要签名的header分开
-        let (sign_map, remaining_map) = partition_header(req_header_map);
 
-        // 创建CanonicalHeaders，把所有需要签名的header放到CanonicalHeader中
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        // 如果有x-meta-*，将其添加到canonical_header中参与签名
+        // 如果有x-meta-*，将其添加到请求头中
         if !self.custom_metas.is_empty() {
             let custom_meta_map = self
                 .custom_metas
                 .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .map(|(k, v)| (k.clone(), v.clone()))
                 .collect::<HashMap<_, _>>();
-            canonical_header.extend(custom_meta_map);
+            req_header_map.extend(custom_meta_map);
         };
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
 
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &client.region,
-            http_verb: HTTPVerb::Put,
-            uri: &request_url,
-            bucket: Some(&client.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = client.sign_v4(sign_v4_param);
-
-        // 把canonical_header转化为最终的header，补齐剩下的未参与签名计算的header
-        // 包括：剩下必要的公共请求头，api header中的非签名字段
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        let header_map = into_request_header(header);
+        let header_map = get_request_header(client, req_header_map, &request_url);
 
         let data = match object {
             PutObjectBody::Bytes(bytes) => Body::from(bytes),

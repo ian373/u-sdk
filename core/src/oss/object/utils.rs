@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// 将Header分为需要参与签名的Header和剩余Header
-pub fn partition_header(
+pub(crate) fn partition_header(
     header_map: HashMap<String, String>,
 ) -> (HashMap<String, String>, HashMap<String, String>) {
     let mut sign_map = HashMap::new();
