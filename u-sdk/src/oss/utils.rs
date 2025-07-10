@@ -1,12 +1,11 @@
-use crate::error::Error;
 use crate::oss::Client;
+use crate::oss::Error;
 use crate::oss::object::utils::partition_header;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use base64::{Engine, engine::general_purpose};
 use common_lib::helper::gmt_format;
 use md5::{Digest, Md5};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use tokio::io::AsyncReadExt;
@@ -39,43 +38,57 @@ pub(crate) fn into_request_header(map: HashMap<&str, &str>) -> HeaderMap {
         .collect()
 }
 
-pub(crate) async fn handle_response_status(resp: reqwest::Response) -> Result<String, Error> {
+pub(crate) async fn into_request_failed_error(resp: reqwest::Response) -> Error {
     let status = resp.status();
-    let text = resp.text().await?;
-    if !status.is_success() {
-        return Err(Error::RequestAPIFailed {
+    let body = resp.text().await;
+    match body {
+        Ok(text) => Error::RequestAPIFailed {
             status: status.to_string(),
             text,
-        });
+        },
+        Err(e) => Error::Reqwest(e),
     }
-    Ok(text)
 }
 
-// TODO 这个trait没必要存在，到时后删了
-pub(crate) trait SerializeToHashMap
-where
-    Self: Sized + Serialize,
-{
-    fn serialize_to_hashmap(&self) -> Result<HashMap<String, String>, Error> {
-        let r = serde_json::from_value(serde_json::to_value(self)?)?;
-        Ok(r)
+pub(crate) enum ResponseBodyType {
+    XML,
+    Json,
+}
+
+// TODO 放到common-lib中供全局使用
+pub(crate) async fn parse_response<T: serde::de::DeserializeOwned>(
+    resp: reqwest::Response,
+    body_type: ResponseBodyType,
+) -> Result<T, Error> {
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Err(into_request_failed_error(resp).await);
+    }
+
+    match body_type {
+        ResponseBodyType::XML => {
+            let text = resp.text().await?;
+            let data = quick_xml::de::from_str(&text)
+                .map_err(|e| Error::Common(format!("XML parse error: {}", e)))?;
+            Ok(data)
+        }
+        ResponseBodyType::Json => {
+            let data = resp.json::<T>().await?;
+            Ok(data)
+        }
     }
 }
 
 // 用 buffer 读文件并计算MD5
 pub(crate) async fn compute_md5_from_file(path: &Path) -> Result<String, Error> {
-    let mut file = tokio::fs::File::open(path)
-        .await
-        .map_err(|e| Error::AnyError(format!("open file error: {}", e)))?;
+    let mut file = tokio::fs::File::open(path).await?;
     let mut hasher = Md5::new();
     // 放到堆上并初始化
     let mut buf = vec![0u8; 64 * 1024]; // 64KB buffer
 
     loop {
-        let n = file
-            .read(&mut buf)
-            .await
-            .map_err(|e| Error::AnyError(format!("read file error: {}", e)))?;
+        let n = file.read(&mut buf).await?;
         if n == 0 {
             break;
         }
@@ -89,14 +102,14 @@ pub(crate) async fn compute_md5_from_file(path: &Path) -> Result<String, Error> 
 pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
     // 1. 必须以 '/' 开头
     if !name.starts_with('/') {
-        return Err(Error::AnyError(format!(
+        return Err(Error::Common(format!(
             "object_name `{}` is invalid: must start with `/`",
             name
         )));
     }
     // 2. 不能仅为根路径 "/"
     if name == "/" {
-        return Err(Error::AnyError(format!(
+        return Err(Error::Common(format!(
             "object_name `{}` is invalid: root `/` not allowed",
             name
         )));
@@ -117,13 +130,13 @@ pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
         }
         // 以下任何情况都算非法
         if seg.is_empty() {
-            return Err(Error::AnyError(format!(
+            return Err(Error::Common(format!(
                 "object_name `{}` is invalid: empty segment at position {}",
                 name, i
             )));
         }
         if *seg == "." || *seg == ".." {
-            return Err(Error::AnyError(format!(
+            return Err(Error::Common(format!(
                 "object_name `{}` is invalid: segment `{}` not allowed",
                 name, seg
             )));

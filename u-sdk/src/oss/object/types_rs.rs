@@ -1,5 +1,6 @@
 use super::super::Client;
-use crate::oss::utils::SerializeToHashMap;
+use crate::oss::Error;
+use crate::oss::utils::validate_object_name;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
@@ -50,21 +51,30 @@ pub struct PutObject<'a> {
     // endregion
 }
 
-// x-oss-meta-* Header<br/>
-// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
-impl<'a, S: put_object_builder::State> PutObjectBuilder<'a, S> {
-    pub fn x_meta(mut self, key: &'a str, val: &'a str) -> Self {
-        self.custom_metas
+pub trait OssMetaExt<'a>: Sized {
+    /// 需要让实现者返回对内部 custom_metas 的可变引用
+    fn custom_metas_mut(&mut self) -> &mut HashMap<String, String>;
+
+    fn x_meta(mut self, key: &'a str, val: &'a str) -> Self {
+        self.custom_metas_mut()
             .insert(format!("x-oss-meta-{key}"), val.to_owned());
         self
     }
 
-    pub fn x_metas(mut self, metas: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+    fn x_metas(mut self, metas: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
         for (key, val) in metas {
-            self.custom_metas
+            self.custom_metas_mut()
                 .insert(format!("x-oss-meta-{key}"), val.to_owned());
         }
         self
+    }
+}
+
+// x-oss-meta-* Header<br/>
+// 对于`XOtherHeader`中的key: value，会自动转换为: `x-oss-meta-key: value`，并添加到请求的Header
+impl<'a, S: put_object_builder::State> OssMetaExt<'a> for PutObjectBuilder<'a, S> {
+    fn custom_metas_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.custom_metas
     }
 }
 
@@ -116,74 +126,112 @@ pub struct GetObjectResponseHeader {
 
 // region:    --- copy object
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Default)]
+#[derive(Builder, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct CopyObjectXHeader<'a> {
-    pub x_oss_forbid_overwrite: Option<&'a str>,
-    pub x_oss_copy_source: &'a str,
-    pub x_oss_copy_source_if_match: Option<&'a str>,
-    pub x_oss_copy_source_if_none_match: Option<&'a str>,
-    pub x_oss_copy_source_if_unmodified_since: Option<&'a str>,
-    pub x_oss_copy_source_if_modified_since: Option<&'a str>,
-    pub x_oss_metadata_directive: Option<&'a str>,
-    pub x_oss_server_side_encryption: Option<&'a str>,
-    pub x_oss_server_side_encryption_key_id: Option<&'a str>,
-    pub x_oss_object_acl: Option<&'a str>,
-    pub x_oss_storage_class: Option<&'a str>,
-    pub x_oss_tagging: Option<&'a str>,
-    pub x_oss_tagging_directive: Option<&'a str>,
+pub struct CopyObject<'a> {
+    #[builder(start_fn)]
+    #[serde(skip_serializing)]
+    pub(crate) client: &'a Client,
+
+    x_oss_forbid_overwrite: Option<&'a str>,
+    #[builder(with = |s: &'a str| ->Result<_, Error> {
+        validate_object_name(s)?;
+        Ok(s)
+    })]
+    pub(crate) x_oss_copy_source: &'a str,
+    x_oss_copy_source_if_match: Option<&'a str>,
+    x_oss_copy_source_if_none_match: Option<&'a str>,
+    x_oss_copy_source_if_unmodified_since: Option<&'a str>,
+    x_oss_copy_source_if_modified_since: Option<&'a str>,
+    x_oss_metadata_directive: Option<&'a str>,
+    x_oss_server_side_encryption: Option<&'a str>,
+    x_oss_server_side_encryption_key_id: Option<&'a str>,
+    x_oss_object_acl: Option<&'a str>,
+    x_oss_storage_class: Option<&'a str>,
+    x_oss_tagging: Option<&'a str>,
+    x_oss_tagging_directive: Option<&'a str>,
 }
 
-impl SerializeToHashMap for CopyObjectXHeader<'_> {}
-
-pub struct CopyObjectDestInfo<'a> {
-    pub region: &'a str,
-    pub endpoint: &'a str,
-    pub bucket: &'a str,
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct CopyObjectResult {
+    pub e_tag: String,
+    pub last_modified: String,
 }
 // endregion: --- copy object
 
 // region:    --- append object
-#[serde_as]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Default)]
+#[derive(Builder, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct AppendObjectHeader<'a> {
-    // 公共请求头
-    /// 对于MIME不会进行检查合法性检查
-    pub content_type: Option<&'a str>,
-    // content_length  自动添加
+pub struct AppendObject<'a> {
+    #[serde(skip_serializing)]
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
 
     // api请求头
+    // x-oss-meta-* Header
+    #[serde(skip_serializing)]
+    #[builder(field)]
+    pub(crate) custom_metas: HashMap<String, String>,
     // append, position添加到url的query中;append不添加到header中
-    #[serde_as(as = "DisplayFromStr")]
-    pub position: u64,
-    pub cache_control: Option<&'a str>,
-    pub content_disposition: Option<&'a str>,
-    pub content_encoding: Option<&'a str>,
-    // content_md5自动添加
-    pub expires: Option<&'a str>,
-    pub x_oss_server_side_encryption: Option<&'a str>,
-    pub x_oss_object_acl: Option<&'a str>,
-    pub x_oss_storage_class: Option<&'a str>,
-    pub x_oss_tagging: Option<&'a str>,
+    cache_control: Option<&'a str>,
+    content_disposition: Option<&'a str>,
+    // content_md5 自动添加
+    expires: Option<&'a str>,
+    x_oss_server_side_encryption: Option<&'a str>,
+    x_oss_object_acl: Option<&'a str>,
+    x_oss_storage_class: Option<&'a str>,
+    x_oss_tagging: Option<&'a str>,
+
+    // 公共请求头
+    content_type: Option<&'a str>,
+    // content_length  自动添加
 }
 
-impl SerializeToHashMap for AppendObjectHeader<'_> {}
+impl<'a, S: append_object_builder::State> OssMetaExt<'a> for AppendObjectBuilder<'a, S> {
+    fn custom_metas_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.custom_metas
+    }
+}
+
 // endregion: --- append object
 
+// region:    --- delete object
+#[derive(Debug)]
+pub struct DeleteObjectResponseHeader {
+    pub x_oss_delete_marker: Option<bool>,
+    pub x_oss_version_id: Option<String>,
+}
+// endregion
+
 // region:    --- delete_multiple_objects
+#[derive(Builder)]
+pub struct DeleteMultipleObjects<'a> {
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+
+    // api请求头
+    pub(crate) encoding_type: Option<&'a str>,
+    // Content-Length 自动添加
+    // Content-MD5 自动添加
+
+    // 请求元素
+    pub(crate) objects: Vec<ObjectToDelete<'a>>,
+    pub(crate) quiet: bool,
+}
+
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct DeleteMultipleObjectsRequest<'a> {
     pub quiet: bool,
-    pub object: Vec<DeleteObject<'a>>,
+    pub object: &'a Vec<ObjectToDelete<'a>>,
 }
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct DeleteObject<'a> {
+pub struct ObjectToDelete<'a> {
     pub key: &'a str,
     pub version_id: Option<&'a str>,
 }
@@ -206,14 +254,57 @@ pub struct Deleted {
 
 // region:    --- head object
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Default)]
+#[derive(Builder, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct HeadObjectHeader<'a> {
+pub struct HeadObject<'a> {
+    #[builder(start_fn)]
+    #[serde(skip_serializing)]
+    pub(crate) client: &'a Client,
+
     pub if_modified_since: Option<&'a str>,
     pub if_unmodified_since: Option<&'a str>,
     pub if_match: Option<&'a str>,
     pub if_none_match: Option<&'a str>,
 }
 
-impl SerializeToHashMap for HeadObjectHeader<'_> {}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct HeadObjectResponseHeader {
+    #[serde(default, skip_deserializing)]
+    pub custom_x_oss_meta: HashMap<String, String>,
+    pub x_oss_server_side_encryption: Option<String>,
+    pub x_oss_server_side_encryption_key_id: Option<String>,
+    pub x_oss_storage_class: String,
+    pub x_oss_object_type: String,
+    pub x_oss_next_append_position: Option<String>,
+    pub x_oss_hash_crc64ecma: Option<String>,
+    pub x_oss_transition_time: Option<String>,
+    pub x_oss_expiration: Option<String>,
+    pub x_oss_restore: Option<String>,
+    pub x_oss_process_status: Option<String>,
+    pub x_oss_request_charged: Option<String>,
+    pub content_md5: Option<String>,
+    pub last_modified: String,
+    pub access_control_allow_origin: Option<String>,
+    pub access_control_allow_methods: Option<String>,
+    pub access_control_max_age: Option<String>,
+    pub access_control_allow_headers: Option<String>,
+    pub access_control_expose_headers: Option<String>,
+    pub x_oss_tagging_count: Option<String>,
+}
 // endregion: --- head object
+
+// region get object meta
+#[serde_as]
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct GetObjectMetaResponseHeader {
+    #[serde_as(as = "DisplayFromStr")]
+    pub content_length: u64,
+    pub etag: String,
+    pub x_oss_transition_time: Option<String>,
+    pub x_oss_last_access_time: Option<String>,
+    pub last_modified: String,
+    pub x_oss_version_id: Option<String>,
+}
+// endregion

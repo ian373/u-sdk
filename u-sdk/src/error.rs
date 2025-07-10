@@ -1,5 +1,6 @@
 //! 错误类型
 
+// TOOD 把这个类型删了，不使用全局通用类型，每个模块各自维护各自的错误类型
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     /// 使用reqwest发出请求，如果发生错误，返回[reqwest::Error]

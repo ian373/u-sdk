@@ -3,18 +3,18 @@
 //! [官方文档](https://help.aliyun.com/zh/oss/developer-reference/basic-operations-1/)
 
 use super::types_rs::*;
-use crate::error::Error;
 use crate::oss::Client;
-use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
+use crate::oss::Error;
+use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
-    SerializeToHashMap, compute_md5_from_file, get_content_md5, get_request_header,
-    handle_response_status, into_request_header, validate_object_name,
+    ResponseBodyType, compute_md5_from_file, get_content_md5, get_request_header,
+    into_request_failed_error, parse_response, validate_object_name,
 };
 use bytes::Bytes;
-use common_lib::helper::gmt_format;
 use futures_util::{Stream, StreamExt};
 use reqwest::Body;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::path::Path;
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
@@ -46,9 +46,7 @@ impl<'a> PutObject<'a> {
                 req_header_map.insert("content-length".to_owned(), bytes.len().to_string());
             }
             PutObjectBody::FilePath(path) => {
-                let file_size = std::fs::metadata(path)
-                    .map_err(|_| Error::AnyError("get file metadata error".to_owned()))?
-                    .len();
+                let file_size = std::fs::metadata(path)?.len();
                 req_header_map.insert("content-length".to_owned(), file_size.to_string());
                 let md5_str = compute_md5_from_file(path).await?;
                 req_header_map.insert("content-md5".to_owned(), md5_str);
@@ -70,9 +68,7 @@ impl<'a> PutObject<'a> {
         let data = match object {
             PutObjectBody::Bytes(bytes) => Body::from(bytes),
             PutObjectBody::FilePath(path) => {
-                let file = tokio::fs::File::open(path)
-                    .await
-                    .map_err(|e| Error::AnyError(format!("open file error: {}", e)))?;
+                let file = tokio::fs::File::open(path).await?;
                 let stream = ReaderStream::new(file);
                 Body::wrap_stream(stream)
             }
@@ -87,10 +83,7 @@ impl<'a> PutObject<'a> {
             .await?;
 
         if !resp.status().is_success() {
-            return Err(Error::RequestAPIFailed {
-                status: resp.status().to_string(),
-                text: resp.text().await?,
-            });
+            return Err(into_request_failed_error(resp).await);
         }
 
         let header = resp.headers();
@@ -127,10 +120,7 @@ impl GetObject<'_> {
         object_name: &str,
     ) -> Result<(Bytes, GetObjectResponseHeader), Error> {
         let (resp, response_header) = self.get_response(object_name).await?;
-        let data = resp
-            .bytes()
-            .await
-            .map_err(|e| Error::AnyError(format!("get object bytes error: {}", e)))?;
+        let data = resp.bytes().await?;
 
         Ok((data, response_header))
     }
@@ -161,18 +151,12 @@ impl GetObject<'_> {
     ) -> Result<GetObjectResponseHeader, Error> {
         let (mut resp, response_header) = self.get_response(object_name).await?;
 
-        let mut file = tokio::fs::File::create(file_path)
-            .await
-            .map_err(|e| Error::AnyError(format!("create file error: {}", e)))?;
+        let mut file = tokio::fs::File::create(file_path).await?;
 
         while let Some(chunk) = resp.chunk().await? {
-            file.write_all(&chunk)
-                .await
-                .map_err(|e| Error::AnyError(format!("write file error: {}", e)))?;
+            file.write_all(&chunk).await?;
         }
-        file.flush()
-            .await
-            .map_err(|e| Error::AnyError(format!("flush file error: {}", e)))?;
+        file.flush().await?;
 
         Ok(response_header)
     }
@@ -203,11 +187,7 @@ impl GetObject<'_> {
 
         let status = resp.status();
         if !status.is_success() {
-            let text = resp.text().await?;
-            return Err(Error::RequestAPIFailed {
-                status: status.to_string(),
-                text,
-            });
+            return Err(into_request_failed_error(resp).await);
         }
 
         let header = resp.headers();
@@ -231,6 +211,199 @@ impl GetObject<'_> {
     }
 }
 
+impl CopyObject<'_> {
+    /// - 不会对参数的bucket，endpoint，object_name，region进行合法性检查，需要自行保证
+    /// - `copy_object_dest_info`：如为None，将使用client中的提供的相关信息
+    pub async fn send(
+        &self,
+        dest_bucket: &str,
+        dest_object_name: &str,
+    ) -> Result<CopyObjectResult, Error> {
+        validate_object_name(dest_object_name)?;
+
+        let client = self.client;
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}{}",
+            dest_bucket, client.endpoint, dest_object_name
+        ))
+        .unwrap();
+
+        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Put);
+
+        let resp = client
+            .http_client
+            .put(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let data = parse_response(resp, ResponseBodyType::XML).await?;
+        Ok(data)
+    }
+}
+
+impl AppendObject<'_> {
+    /// - 当创建一个新的Appendable Object的时候，`position`设为`0`
+    /// - 如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
+    pub async fn send(
+        &self,
+        object_name: &str,
+        position: u64,
+        data: Vec<u8>,
+    ) -> Result<(u64, String), Error> {
+        validate_object_name(object_name)?;
+
+        let client = self.client;
+        let request_url = url::Url::parse_with_params(
+            &format!(
+                "https://{}.{}{}",
+                client.bucket, client.endpoint, object_name
+            ),
+            [("append", ""), ("position", &position.to_string())],
+        )
+        .unwrap();
+
+        let mut req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+
+        if !self.custom_metas.is_empty() {
+            let custom_meta_map = self
+                .custom_metas
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<HashMap<_, _>>();
+            req_header_map.extend(custom_meta_map);
+        }
+
+        req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
+        req_header_map.insert("content-length".to_owned(), data.len().to_string());
+
+        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Post);
+
+        let resp = client
+            .http_client
+            .post(request_url)
+            .headers(header_map)
+            .body(data)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(into_request_failed_error(resp).await);
+        }
+
+        let next_position = resp
+            .headers()
+            .get("x-oss-next-append-position")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
+        let response_hash = resp
+            .headers()
+            .get("x-oss-hash-crc64ecma")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
+        Ok((next_position, response_hash))
+    }
+}
+
+impl DeleteMultipleObjects<'_> {
+    pub async fn send(&self) -> Result<DeleteResult, Error> {
+        let client = self.client;
+
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}/?delete",
+            client.bucket, client.endpoint
+        ))
+        .unwrap();
+        let delete_req = DeleteMultipleObjectsRequest {
+            quiet: self.quiet,
+            object: &self.objects,
+        };
+        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req).unwrap();
+        let mut req_header_map = HashMap::with_capacity(3);
+        if let Some(encoding_type) = self.encoding_type {
+            req_header_map.insert("encoding-type".to_owned(), encoding_type.to_owned());
+        }
+        req_header_map.insert("content-length".to_owned(), req_body.len().to_string());
+        req_header_map.insert(
+            "content-md5".to_owned(),
+            get_content_md5(req_body.as_bytes()),
+        );
+
+        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Post);
+
+        let resp = client
+            .http_client
+            .post(request_url)
+            .headers(header_map)
+            .body(req_body)
+            .send()
+            .await?;
+
+        let data = parse_response(resp, ResponseBodyType::XML).await?;
+        Ok(data)
+    }
+}
+
+impl HeadObject<'_> {
+    pub async fn send(&self, object_name: &str) -> Result<HeadObjectResponseHeader, Error> {
+        validate_object_name(object_name)?;
+
+        let client = self.client;
+        let request_url = url::Url::parse(&format!(
+            "https://{}.{}{}",
+            client.bucket, client.endpoint, object_name
+        ))
+        .unwrap();
+
+        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+
+        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Head);
+
+        let resp = client
+            .http_client
+            .head(request_url)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(into_request_failed_error(resp).await);
+        }
+
+        let mut map = Map::with_capacity(30);
+        let mut custom_meta_map = HashMap::new();
+        for (name, val) in resp.headers().iter() {
+            let name_s = name.as_str();
+            if let Ok(s) = val.to_str() {
+                if name_s.starts_with("x-oss-meta-") {
+                    custom_meta_map.insert(
+                        name_s.trim_start_matches("x-oss-meta-").to_string(),
+                        s.to_string(),
+                    );
+                } else {
+                    map.insert(name_s.to_string(), Value::String(s.to_string()));
+                }
+            }
+        }
+
+        let mut data: HeadObjectResponseHeader =
+            serde_json::from_value(Value::Object(map)).unwrap();
+        if !custom_meta_map.is_empty() {
+            data.custom_x_oss_meta = custom_meta_map;
+        }
+        Ok(data)
+    }
+}
+
 /// Object基础操作
 impl Client {
     pub fn put_object(&self) -> PutObjectBuilder {
@@ -241,176 +414,33 @@ impl Client {
         GetObject::builder(self)
     }
 
-    /// - 不会对参数的bucket，endpoint，object_name，region进行合法性检查，需要自行保证
-    /// - `copy_object_dest_info`：如为None，将使用client中的提供的相关信息
-    pub async fn copy_object(
-        &self,
-        copy_object_x_header: CopyObjectXHeader<'_>,
-        dest_object_name: &str,
-        copy_object_dest_info: Option<CopyObjectDestInfo<'_>>,
-    ) -> Result<(), Error> {
-        let (dest_region, dest_end_point, dest_bucket) =
-            if let Some(dest_info) = copy_object_dest_info {
-                (dest_info.region, dest_info.endpoint, dest_info.bucket)
-            } else {
-                (
-                    self.region.as_ref(),
-                    self.endpoint.as_ref(),
-                    self.bucket.as_ref(),
-                )
-            };
-        let request_url = url::Url::parse(&format!(
-            "https://{}.{}/{}",
-            dest_bucket, dest_end_point, dest_object_name
-        ))
-        .unwrap();
-        let mut canonical_header = BTreeMap::new();
-        let copy_object_header = copy_object_x_header.serialize_to_hashmap()?;
-        canonical_header.extend(
-            copy_object_header
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str())),
-        );
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
-
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: dest_region,
-            http_verb: HTTPVerb::Put,
-            uri: &request_url,
-            bucket: Some(dest_bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let header_map = into_request_header(header);
-
-        let resp = self
-            .http_client
-            .put(request_url)
-            .headers(header_map)
-            .send()
-            .await?;
-
-        let _ = handle_response_status(resp).await?;
-
-        Ok(())
+    pub fn copy_object(&self) -> CopyObjectBuilder {
+        CopyObject::builder(self)
     }
 
-    /// - 当创建一个新的Appendable Object的时候，`position`设为`0`
-    /// - 如果该object已存在，则`position`为该Object的字节大小，即此次append object的起始位置
-    // pub async fn append_object(
-    //     &self,
-    //     object_name: &str,
-    //     append_object_header: AppendObjectHeader<'_>,
-    //     x_meta_header: Option<XMetaHeader<'_>>,
-    //     data: Vec<u8>,
-    // ) -> Result<u64, Error> {
-    //     let request_url = url::Url::parse_with_params(
-    //         &format!("https://{}.{}/{}", self.bucket, self.endpoint, object_name),
-    //         [
-    //             ("append", ""),
-    //             ("position", &append_object_header.position.to_string()),
-    //         ],
-    //     )
-    //     .unwrap();
-    //     let mut req_header_map = append_object_header.serialize_to_hashmap()?;
-    //     req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
-    //     req_header_map.insert("content-length".to_owned(), data.len().to_string());
-    //     let (sign_map, remaining_map) = partition_header(req_header_map);
-    //
-    //     let mut canonical_header = BTreeMap::new();
-    //     canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-    //     let meta_map = if let Some(m) = x_meta_header {
-    //         m.get_meta_map()
-    //     } else {
-    //         HashMap::with_capacity(0)
-    //     };
-    //     canonical_header.extend(meta_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-    //     canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-    //     canonical_header.insert("host", request_url.host_str().unwrap());
-    //
-    //     let mut additional_header = BTreeSet::new();
-    //     additional_header.insert("host");
-    //     let now = time::OffsetDateTime::now_utc();
-    //     let sign_v4_param = SignV4Param {
-    //         signing_region: &self.region,
-    //         http_verb: HTTPVerb::Post,
-    //         uri: &request_url,
-    //         bucket: Some(&self.bucket),
-    //         header_map: &canonical_header,
-    //         additional_header: Some(&additional_header),
-    //         date_time: &now,
-    //     };
-    //     let authorization = self.sign_v4(sign_v4_param);
-    //
-    //     let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-    //     header.insert("Authorization", &authorization);
-    //     let gmt = gmt_format(&now);
-    //     header.insert("Date", &gmt);
-    //     header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-    //     let header_map = into_request_header(header);
-    //
-    //     let mut resp = self
-    //         .http_client
-    //         .post(request_url)
-    //         .headers(header_map)
-    //         .body(data)
-    //         .send()
-    //         .await?;
-    //
-    //     let next_position = resp.headers_mut().remove("x-oss-next-append-position");
-    //     let _ = handle_response_status(resp).await?;
-    //     let next_position = next_position
-    //         .unwrap()
-    //         .to_str()
-    //         .unwrap()
-    //         .parse::<u64>()
-    //         .unwrap();
-    //
-    //     Ok(next_position)
-    // }
+    pub fn append_object(&self) -> AppendObjectBuilder {
+        AppendObject::builder(self)
+    }
 
     /// 无论object是否存在都会执行删除操作并返回成功
-    pub async fn delete_object(&self, object_name: &str) -> Result<(), Error> {
+    pub async fn delete_object(
+        &self,
+        object_name: &str,
+    ) -> Result<DeleteObjectResponseHeader, Error> {
+        validate_object_name(object_name)?;
+
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}/{}",
+            "https://{}.{}{}",
             self.bucket, self.endpoint, object_name
         ))
         .unwrap();
 
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
-
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Delete,
-            uri: &request_url,
-            bucket: Some(&self.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let header_map = into_request_header(header);
+        let header_map = get_request_header(
+            self,
+            HashMap::with_capacity(0),
+            &request_url,
+            HTTPVerb::Delete,
+        );
 
         let resp = self
             .http_client
@@ -419,135 +449,31 @@ impl Client {
             .send()
             .await?;
 
-        let _ = handle_response_status(resp).await?;
-        Ok(())
-    }
-
-    pub async fn delete_multiple_objects(
-        &self,
-        encoding_type: Option<&str>,
-        delete_objects: Vec<DeleteObject<'_>>,
-        is_quiet_resp: bool,
-    ) -> Result<Option<DeleteResult>, Error> {
-        let request_url = url::Url::parse(&format!(
-            "https://{}.{}/?delete",
-            self.bucket, self.endpoint
-        ))
-        .unwrap();
-        let delete_req = DeleteMultipleObjectsRequest {
-            quiet: is_quiet_resp,
-            object: delete_objects,
-        };
-        let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req)
-            .map_err(|_| Error::AnyError("to string with root error".to_owned()))?;
-
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
-        let content_md5 = get_content_md5(req_body.as_bytes());
-        canonical_header.insert("content-md5", &content_md5);
-
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Post,
-            uri: &request_url,
-            bucket: Some(&self.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let content_length = req_body.len().to_string();
-        header.insert("Content-Length", &content_length);
-        if let Some(encoding) = encoding_type {
-            header.insert("Encoding-type", encoding);
+        if !resp.status().is_success() {
+            return Err(into_request_failed_error(resp).await);
         }
-        let header_map = into_request_header(header);
 
-        let resp = self
-            .http_client
-            .post(request_url)
-            .headers(header_map)
-            .body(req_body)
-            .send()
-            .await?;
-
-        let text = handle_response_status(resp).await?;
-        let res = quick_xml::de::from_str(&text)?;
-        Ok(res)
-    }
-
-    pub async fn head_object(
-        &self,
-        object_name: &str,
-        head_object_header: Option<HeadObjectHeader<'_>>,
-    ) -> Result<HashMap<String, String>, Error> {
-        let request_url = url::Url::parse(&format!(
-            "https://{}.{}/{}",
-            self.bucket, self.endpoint, object_name
-        ))
-        .unwrap();
-
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
-
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Head,
-            uri: &request_url,
-            bucket: Some(&self.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        let req_header_map = if let Some(h) = head_object_header {
-            h.serialize_to_hashmap()?
-        } else {
-            HashMap::with_capacity(0)
-        };
-        header.extend(req_header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let header_map = into_request_header(header);
-
-        let resp = self
-            .http_client
-            .head(request_url)
-            .headers(header_map)
-            .send()
-            .await?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let text = resp.text().await?;
-            return Err(Error::RequestAPIFailed {
-                status: status.to_string(),
-                text,
-            });
-        }
-        let response_header = resp
+        let x_oss_delete_marker = resp
             .headers()
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
-            .collect();
+            .get("x-oss-delete-marker")
+            .map(|v| v.to_str().unwrap().parse::<bool>().unwrap());
+        let x_oss_version_id = resp
+            .headers()
+            .get("x-oss-version-id")
+            .map(|v| v.to_str().unwrap().to_owned());
 
-        Ok(response_header)
+        Ok(DeleteObjectResponseHeader {
+            x_oss_delete_marker,
+            x_oss_version_id,
+        })
+    }
+
+    pub fn delete_multiple_objects(&self) -> DeleteMultipleObjectsBuilder {
+        DeleteMultipleObjects::builder(self)
+    }
+
+    pub fn head_object(&self) -> HeadObjectBuilder {
+        HeadObject::builder(self)
     }
 
     /// - 这里返回`HashMap`而没有返回struct，主要考虑到response header中有一些参数文档中没说出来，不便于转化为指定的struct
@@ -555,36 +481,21 @@ impl Client {
     pub async fn get_object_meta(
         &self,
         object_name: &str,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> Result<GetObjectMetaResponseHeader, Error> {
+        validate_object_name(object_name)?;
+
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}/{}?objectMeta",
+            "https://{}.{}{}?objectMeta",
             self.bucket, self.endpoint, object_name
         ))
         .unwrap();
 
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
-
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Head,
-            uri: &request_url,
-            bucket: Some(&self.bucket),
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let header_map = into_request_header(header);
+        let header_map = get_request_header(
+            self,
+            HashMap::with_capacity(0),
+            &request_url,
+            HTTPVerb::Head,
+        );
 
         let resp = self
             .http_client
@@ -595,18 +506,18 @@ impl Client {
 
         let status = resp.status();
         if !status.is_success() {
-            let text = resp.text().await?;
-            return Err(Error::RequestAPIFailed {
-                status: status.to_string(),
-                text,
-            });
+            return Err(into_request_failed_error(resp).await);
         }
-        let response_header = resp
-            .headers()
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_owned()))
-            .collect();
 
-        Ok(response_header)
+        let mut response_header = Map::with_capacity(10);
+        for (name, val) in resp.headers().iter() {
+            let name_s = name.as_str();
+            if let Ok(s) = val.to_str() {
+                response_header.insert(name_s.to_string(), Value::String(s.to_string()));
+            }
+        }
+
+        let data = serde_json::from_value(Value::Object(response_header)).unwrap();
+        Ok(data)
     }
 }

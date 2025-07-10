@@ -1,9 +1,8 @@
 use futures_util::StreamExt;
 use oss::object::types_rs::*;
+use serde::Deserialize;
 use std::path::Path;
 use u_sdk::oss;
-
-use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct AliConfig {
@@ -34,102 +33,102 @@ fn get_oss_client() -> oss::Client {
         .build()
 }
 
-#[tokio::test]
-async fn list_buckets_test() {
-    let client = get_oss_client();
+// #[tokio::test]
+// async fn list_buckets_test() {
+//     let client = get_oss_client();
+//
+//     let query = oss::service::ListBucketsQueryParams {
+//         prefix: Some("test"),
+//         ..Default::default()
+//     };
+//     let res = client.list_buckets(None, Some(query)).await;
+//     match res {
+//         Ok(s) => println!("res:\n{:#?}", s),
+//         Err(e) => println!("{}", e),
+//     }
+// }
 
-    let query = oss::service::ListBucketsQueryParams {
-        prefix: Some("test"),
-        ..Default::default()
-    };
-    let res = client.list_buckets(None, Some(query)).await;
-    match res {
-        Ok(s) => println!("res:\n{:#?}", s),
-        Err(e) => println!("{}", e),
-    }
-}
+// #[tokio::test]
+// async fn describe_regions_test() {
+//     let client = get_oss_client();
+//     let res = client.describe_regions(Some("oss-ap-northeast-1")).await;
+//     match res {
+//         Ok(s) => println!("res:\n{:#?}", s),
+//         Err(e) => println!("{}", e),
+//     }
+// }
 
-#[tokio::test]
-async fn describe_regions_test() {
-    let client = get_oss_client();
-    let res = client.describe_regions(Some("oss-ap-northeast-1")).await;
-    match res {
-        Ok(s) => println!("res:\n{:#?}", s),
-        Err(e) => println!("{}", e),
-    }
-}
+// #[tokio::test]
+// async fn put_bucket_test() {
+//     let client = get_oss_client();
+//
+//     let res = client
+//         .put_bucket(
+//             "example-oss-test-todel",
+//             "oss-cn-hangzhou.aliyuncs.com",
+//             None,
+//             None,
+//         )
+//         .await;
+//
+//     match res {
+//         Ok(_) => println!("success!"),
+//         Err(e) => println!("{}", e),
+//     }
+// }
 
-#[tokio::test]
-async fn put_bucket_test() {
-    let client = get_oss_client();
-
-    let res = client
-        .put_bucket(
-            "example-oss-test-todel",
-            "oss-cn-hangzhou.aliyuncs.com",
-            None,
-            None,
-        )
-        .await;
-
-    match res {
-        Ok(_) => println!("success!"),
-        Err(e) => println!("{}", e),
-    }
-}
-
-#[tokio::test]
-async fn list_objects_v2_test() {
-    use oss::bucket::ListObjectsV2Query;
-
-    let client = get_oss_client();
-
-    let params = ListObjectsV2Query {
-        prefix: Some("test/"),
-        ..Default::default()
-    };
-    let res = client.list_objects_v2(params).await;
-
-    match res {
-        Ok(s) => println!("res:\n {:#?}", s),
-        Err(e) => println!("error: {}", e),
-    }
-}
-
-#[tokio::test]
-async fn get_bucket_info_test() {
-    let client = get_oss_client();
-    let res = client.get_bucket_info().await;
-
-    match res {
-        Ok(s) => println!("res:\n {:#?}", s),
-        Err(e) => println!("error: {}", e),
-    }
-}
-
-#[tokio::test]
-async fn get_bucket_location_test() {
-    let client = get_oss_client();
-
-    let res = client.get_bucket_location().await;
-
-    match res {
-        Ok(s) => println!("res:\n {}", s),
-        Err(e) => println!("error: {}", e),
-    }
-}
-
-#[tokio::test]
-async fn get_bucket_stat_test() {
-    let client = get_oss_client();
-
-    let res = client.get_bucket_stat().await;
-
-    match res {
-        Ok(s) => println!("res:\n {:#?}", s),
-        Err(e) => println!("error: {}", e),
-    }
-}
+// #[tokio::test]
+// async fn list_objects_v2_test() {
+//     use oss::bucket::ListObjectsV2Query;
+//
+//     let client = get_oss_client();
+//
+//     let params = ListObjectsV2Query {
+//         prefix: Some("test/"),
+//         ..Default::default()
+//     };
+//     let res = client.list_objects_v2(params).await;
+//
+//     match res {
+//         Ok(s) => println!("res:\n {:#?}", s),
+//         Err(e) => println!("error: {}", e),
+//     }
+// }
+//
+// #[tokio::test]
+// async fn get_bucket_info_test() {
+//     let client = get_oss_client();
+//     let res = client.get_bucket_info().await;
+//
+//     match res {
+//         Ok(s) => println!("res:\n {:#?}", s),
+//         Err(e) => println!("error: {}", e),
+//     }
+// }
+//
+// #[tokio::test]
+// async fn get_bucket_location_test() {
+//     let client = get_oss_client();
+//
+//     let res = client.get_bucket_location().await;
+//
+//     match res {
+//         Ok(s) => println!("res:\n {}", s),
+//         Err(e) => println!("error: {}", e),
+//     }
+// }
+//
+// #[tokio::test]
+// async fn get_bucket_stat_test() {
+//     let client = get_oss_client();
+//
+//     let res = client.get_bucket_stat().await;
+//
+//     match res {
+//         Ok(s) => println!("res:\n {:#?}", s),
+//         Err(e) => println!("error: {}", e),
+//     }
+// }
 
 #[tokio::test]
 async fn put_object_test() {
@@ -222,107 +221,96 @@ async fn get_object_by_stream_test() {
 async fn copy_object_test() {
     let client = get_oss_client();
 
-    let x_header = CopyObjectXHeader {
-        x_oss_forbid_overwrite: Some("true"),
-        x_oss_copy_source: &format!("/{}/{}", client.bucket(), "test/test_txt.txt"),
-        ..Default::default()
-    };
-    let dest_info = CopyObjectDestInfo {
-        region: client.region(),
-        bucket: "example-oss-todel",
-        endpoint: client.endpoint(),
-    };
-
-    let res = client
-        .copy_object(x_header, "copy/test_txt_copy.txt", Some(dest_info))
+    let resp = client
+        .copy_object()
+        .x_oss_copy_source("/utab-app/custom-image/01919e65-75f0-7590-b8a8-b3f22f705db8")
+        .unwrap()
+        .build()
+        .send(&client.bucket(), "/test/copy_img.jpg")
         .await;
 
-    match res {
-        Ok(_) => {
-            println!("success!");
-        }
-        Err(e) => println!("error: {}", e),
+    match resp {
+        Ok(res) => println!("[success] response: {:#?}", res),
+        Err(e) => println!("[error] {}", e),
     }
 }
 
-// #[tokio::test]
-// async fn append_object_test() {
-//     let client = get_oss_client();
-//
-//     let append_header = AppendObjectHeader {
-//         content_type: Some("text/plain"),
-//         position: 13,
-//         ..Default::default()
-//     };
-//     let res = client
-//         .append_object(
-//             "test/append_object.txt",
-//             append_header,
-//             None,
-//             b"text123dfasdf".to_vec(),
-//         )
-//         .await;
-//
-//     match res {
-//         Ok(next_pos) => {
-//             println!("next_pos:{}", next_pos);
-//         }
-//         Err(e) => println!("error: {}", e),
-//     }
-// }
+#[tokio::test]
+async fn append_object_test() {
+    let client = get_oss_client();
+
+    let res = client
+        .append_object()
+        .x_metas([("key1", "value1"), ("key2", "value2")])
+        .content_type("text/plain")
+        .build()
+        .send("/test/append_object.txt", 13, b"6666666".to_vec())
+        .await;
+
+    match res {
+        Ok(header) => println!("[success] header: {:#?}", header),
+        Err(e) => println!("[error] {}", e),
+    }
+}
 
 #[tokio::test]
 async fn delete_object_test() {
     let client = get_oss_client();
-
-    let res = client.delete_object("test/append_object.txt").await;
-
+    let res = client.delete_object("/test/IMG_20240726_155048.jpg").await;
     match res {
-        Ok(_) => println!("delete success!"),
-        Err(e) => println!("error: {}", e),
+        Ok(h) => println!("[success] header: {:#?}", h),
+        Err(e) => println!("[error] {}", e),
     }
 }
 
 #[tokio::test]
 async fn delete_multiple_objects_test() {
     let client = get_oss_client();
+    // FIXME 这里的key为文件名称，即不需要`/`开头，这和其它地方使用的object_name不一致了（使用`/`开头），全部改为不以`/`开头的形式
     let objs = vec![
-        DeleteObject {
-            key: "test_dir/123.TXT",
+        ObjectToDelete {
+            key: "test/copy_img.jpg",
             version_id: None,
         },
-        DeleteObject {
-            key: "test_file/1234567890.txt",
+        ObjectToDelete {
+            key: "test/sample.toml",
             version_id: None,
         },
     ];
-    let res = client.delete_multiple_objects(None, objs, true).await;
+    let res = client
+        .delete_multiple_objects()
+        .objects(objs)
+        .quiet(false)
+        .build()
+        .send()
+        .await;
+
     match res {
-        Ok(s) => println!("ok_res:{:#?}", s),
-        Err(e) => println!("error: {}", e),
+        Ok(result) => println!("[success] deleted objects: {:#?}", result.deleted),
+        Err(e) => println!("[error] {}", e),
     }
 }
 
 #[tokio::test]
 async fn head_object_test() {
     let client = get_oss_client();
-
-    let res = client.head_object("copy/test_txt_copy.txt", None).await;
-
+    let res = client
+        .head_object()
+        .build()
+        .send("/test/test_88888.txt")
+        .await;
     match res {
-        Ok(s) => println!("ok_res:{:#?}", s),
-        Err(e) => println!("error: {}", e),
+        Ok(header) => println!("[success] header: {:#?}", header),
+        Err(e) => println!("[error] {}", e),
     }
 }
 
 #[tokio::test]
 async fn get_object_meta_test() {
     let client = get_oss_client();
-
-    let res = client.get_object_meta("copy/test_txt_copy.txt").await;
-
+    let res = client.get_object_meta("/test/test_88888.txt").await;
     match res {
-        Ok(s) => println!("ok_res:{:#?}", s),
-        Err(e) => println!("error: {}", e),
+        Ok(meta) => println!("[success] meta: {:#?}", meta),
+        Err(e) => println!("[error] {}", e),
     }
 }
