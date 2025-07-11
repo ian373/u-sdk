@@ -182,11 +182,14 @@ fn validate_object_name_test() {
     assert!(validate_object_name("abc/../def").is_err());
 }
 
-pub(crate) fn get_request_header(
+// 少数api需要指定和client不同的region和bucket，使用这个方法进行签名计算，同时也作为签名代码的实现
+pub(crate) fn get_request_header_with_bucket_region(
     client: &Client,
     req_header_map: HashMap<String, String>,
     request_url: &Url,
     http_verb: HTTPVerb,
+    signing_region: &str,
+    bucket: Option<&str>,
 ) -> HeaderMap {
     // 把需要签名的header和不需要签名的header分开
     let (sign_map, remaining_map) = partition_header(req_header_map);
@@ -202,10 +205,10 @@ pub(crate) fn get_request_header(
     additional_header.insert("host");
     let now = time::OffsetDateTime::now_utc();
     let sign_v4_param = SignV4Param {
-        signing_region: &client.region,
+        signing_region,
         http_verb,
         uri: request_url,
-        bucket: Some(&client.bucket),
+        bucket,
         header_map: &canonical_header,
         additional_header: Some(&additional_header),
         date_time: &now,
@@ -220,4 +223,21 @@ pub(crate) fn get_request_header(
     header.insert("Date", &gmt);
     header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     into_request_header(header)
+}
+
+// 大部分api的签名都是默认使用client的region和bucket，使用这个方法
+pub(crate) fn get_request_header(
+    client: &Client,
+    req_header_map: HashMap<String, String>,
+    request_url: &Url,
+    http_verb: HTTPVerb,
+) -> HeaderMap {
+    get_request_header_with_bucket_region(
+        client,
+        req_header_map,
+        request_url,
+        http_verb,
+        &client.region,
+        Some(&client.bucket),
+    )
 }

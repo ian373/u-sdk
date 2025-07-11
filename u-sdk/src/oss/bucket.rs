@@ -5,7 +5,8 @@
 use super::Client;
 use super::sign_v4::HTTPVerb;
 use super::utils::{
-    ResponseBodyType, get_request_header, into_request_failed_error, parse_response,
+    ResponseBodyType, get_request_header, get_request_header_with_bucket_region,
+    into_request_failed_error, parse_response,
 };
 use crate::oss::Error;
 use bon::Builder;
@@ -52,8 +53,14 @@ impl PutBucket<'_> {
             Url::parse(&format!("https://{}.{}", self.bucket_name, client.endpoint)).unwrap();
         let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
 
-        // FIXME 这里签名的时候默认使用client的bucket，而这里应该使用self.bucket_name，这导致签名失败，需要解决（还是说移除这个api？）
-        let header = get_request_header(client, req_header_map, &request_url, HTTPVerb::Put);
+        let header = get_request_header_with_bucket_region(
+            client,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Put,
+            &self.client.region,
+            Some(self.bucket_name),
+        );
 
         let req_xml = {
             let create_conf = CreateBucketConfiguration {
