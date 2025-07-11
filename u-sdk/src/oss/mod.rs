@@ -9,7 +9,7 @@
 
 // 所有api的请求逻辑和操作都基本相同，具体逻辑或步骤可参考service.rs的注释理解
 
-// pub mod bucket;
+pub mod bucket;
 pub mod object;
 // pub mod region;
 // pub mod service;

@@ -58,77 +58,85 @@ fn get_oss_client() -> oss::Client {
 //     }
 // }
 
-// #[tokio::test]
-// async fn put_bucket_test() {
-//     let client = get_oss_client();
-//
-//     let res = client
-//         .put_bucket(
-//             "example-oss-test-todel",
-//             "oss-cn-hangzhou.aliyuncs.com",
-//             None,
-//             None,
-//         )
-//         .await;
-//
-//     match res {
-//         Ok(_) => println!("success!"),
-//         Err(e) => println!("{}", e),
-//     }
-// }
+#[tokio::test]
+async fn put_bucket_test() {
+    let client = get_oss_client();
+    let res = client
+        .put_bucket()
+        .bucket_name("example-to-del")
+        .build()
+        .send()
+        .await;
 
-// #[tokio::test]
-// async fn list_objects_v2_test() {
-//     use oss::bucket::ListObjectsV2Query;
-//
-//     let client = get_oss_client();
-//
-//     let params = ListObjectsV2Query {
-//         prefix: Some("test/"),
-//         ..Default::default()
-//     };
-//     let res = client.list_objects_v2(params).await;
-//
-//     match res {
-//         Ok(s) => println!("res:\n {:#?}", s),
-//         Err(e) => println!("error: {}", e),
-//     }
-// }
-//
-// #[tokio::test]
-// async fn get_bucket_info_test() {
-//     let client = get_oss_client();
-//     let res = client.get_bucket_info().await;
-//
-//     match res {
-//         Ok(s) => println!("res:\n {:#?}", s),
-//         Err(e) => println!("error: {}", e),
-//     }
-// }
-//
-// #[tokio::test]
-// async fn get_bucket_location_test() {
-//     let client = get_oss_client();
-//
-//     let res = client.get_bucket_location().await;
-//
-//     match res {
-//         Ok(s) => println!("res:\n {}", s),
-//         Err(e) => println!("error: {}", e),
-//     }
-// }
-//
-// #[tokio::test]
-// async fn get_bucket_stat_test() {
-//     let client = get_oss_client();
-//
-//     let res = client.get_bucket_stat().await;
-//
-//     match res {
-//         Ok(s) => println!("res:\n {:#?}", s),
-//         Err(e) => println!("error: {}", e),
-//     }
-// }
+    match res {
+        Ok(header) => println!("[success] header: {:#?}", header),
+        Err(e) => println!("[error] {}", e),
+    }
+}
+
+#[tokio::test]
+async fn list_objects_v2_test() {
+    let client = get_oss_client();
+    let res = client
+        .list_objects_v2()
+        .prefix("test/")
+        .build()
+        .send()
+        .await;
+    match res {
+        Ok(s) => println!("[success] res:\n{:#?}", s),
+        Err(e) => println!("[error] {}", e),
+    }
+}
+
+#[tokio::test]
+async fn get_bucket_info_test() {
+    let client = get_oss_client();
+    let res = client
+        .get_bucket_info()
+        .bucket("utab-app")
+        .build()
+        .send()
+        .await;
+
+    match res {
+        Ok(info) => println!("[success] bucket info: {:#?}", info),
+        Err(e) => println!("[error] {}", e),
+    }
+}
+
+#[tokio::test]
+async fn get_bucket_location_test() {
+    let client = get_oss_client();
+    let res = client
+        .get_bucket_location()
+        .bucket("utab-app")
+        .build()
+        .send()
+        .await;
+
+    match res {
+        Ok(location) => println!("[success] bucket location: {}", location),
+        Err(e) => println!("[error] {}", e),
+    }
+}
+
+#[tokio::test]
+async fn get_bucket_stat_test() {
+    let client = get_oss_client();
+
+    let res = client
+        .get_bucket_stat()
+        .bucket("utab-app")
+        .build()
+        .send()
+        .await;
+
+    match res {
+        Ok(stat) => println!("[success] bucket stat: {:#?}", stat),
+        Err(e) => println!("[error] {}", e),
+    }
+}
 
 #[tokio::test]
 async fn put_object_test() {
