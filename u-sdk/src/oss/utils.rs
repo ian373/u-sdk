@@ -100,46 +100,52 @@ pub(crate) async fn compute_md5_from_file(path: &Path) -> Result<String, Error> 
 }
 
 pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
-    // 1. 必须以 '/' 开头
-    if !name.starts_with('/') {
-        return Err(Error::Common(format!(
-            "object_name `{}` is invalid: must start with `/`",
-            name
-        )));
+    // 1. 长度检查
+    let len = name.as_bytes().len();
+    if len == 0 {
+        return Err(Error::Common("object_name cannot be empty".to_owned()));
     }
-    // 2. 不能仅为根路径 "/"
-    if name == "/" {
-        return Err(Error::Common(format!(
-            "object_name `{}` is invalid: root `/` not allowed",
-            name
-        )));
+    if len > 1023 {
+        return Err(Error::Common(
+            "object_name is too long, max is 1023 bytes".to_owned(),
+        ));
     }
 
-    // 按照 '/' 拆分，第一段必然是空，最后一段如果有单个 '/' 就是空
-    let parts: Vec<&str> = name.split('/').collect();
-    let last = parts.len() - 1;
+    // 2. 前缀检查
+    if let Some(first) = name.chars().next() {
+        if first == '/' || first == '\\' {
+            return Err(Error::Common(
+                "object_name cannot start with '/' or '\\'".to_owned(),
+            ));
+        }
+    }
 
-    for (i, seg) in parts.iter().enumerate() {
-        if i == 0 {
-            // skip leading empty before the first '/'
-            continue;
-        }
-        if i == last && seg.is_empty() {
-            // allow single trailing slash => last segment empty
-            continue;
-        }
-        // 以下任何情况都算非法
-        if seg.is_empty() {
-            return Err(Error::Common(format!(
-                "object_name `{}` is invalid: empty segment at position {}",
-                name, i
-            )));
-        }
-        if *seg == "." || *seg == ".." {
-            return Err(Error::Common(format!(
-                "object_name `{}` is invalid: segment `{}` not allowed",
-                name, seg
-            )));
+    // 3. 控制字符检查
+    if name.bytes().any(|b| b == b'\r' || b == b'\n') {
+        return Err(Error::Common(
+            "object_name cannot contain control characters".to_owned(),
+        ));
+    }
+
+    // 4. 空路径段检查：先 split，再忽略末尾因 '/' 产生的空段，再拒绝中间任何空字符串
+    let segments: Vec<&str> = name.split('/').collect();
+    let to_check = if name.ends_with('/') {
+        &segments[..segments.len().saturating_sub(1)]
+    } else {
+        &segments[..]
+    };
+    if to_check.iter().any(|seg| seg.is_empty()) {
+        return Err(Error::Common(
+            "object_name cannot contain empty path segments".to_owned(),
+        ));
+    }
+
+    // 5. 相对路径段检查
+    for segment in to_check {
+        if *segment == "." || *segment == ".." {
+            return Err(Error::Common(
+                "object_name cannot contain relative path segments '.' or '..'".to_owned(),
+            ));
         }
     }
 
@@ -148,18 +154,32 @@ pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
 
 #[test]
 fn validate_object_name_test() {
-    assert!(validate_object_name("/foo").is_ok());
-    assert!(validate_object_name("/foo/").is_ok());
-    assert!(validate_object_name("/foo/bar").is_ok());
-    assert!(validate_object_name("/foo/bar/").is_ok());
+    // 合法示例：长度、前缀、末尾斜杠、普通子目录、UTF-8 字符
+    assert!(validate_object_name("exampleobject.txt").is_ok());
+    assert!(validate_object_name("dir/subdir/file_测试-01.log").is_ok());
+    assert!(validate_object_name("a/b").is_ok());
+    assert!(validate_object_name("a/b/").is_ok());
 
-    assert!(validate_object_name("foo").is_err(),);
-    assert!(validate_object_name("/").is_err());
-    assert!(validate_object_name("//foo").is_err());
-    assert!(validate_object_name("/foo//bar").is_err());
-    assert!(validate_object_name("/foo/../bar").is_err());
-    assert!(validate_object_name("/foo/./bar").is_err(),);
-    assert!(validate_object_name("/foo/bar//").is_err());
+    // 非法示例：长度为 0、超过 1023 字节
+    assert!(validate_object_name("").is_err());
+    assert!(validate_object_name(&"a".repeat(1024)).is_err());
+
+    // 非法示例：前缀以 '/' 或 '\' 开头
+    assert!(validate_object_name("/badname").is_err());
+    assert!(validate_object_name("\\badname").is_err());
+
+    // 非法示例：包含控制字符
+    assert!(validate_object_name("bad\r\nname").is_err());
+
+    // 非法示例：连续斜杠导致的空路径段
+    assert!(validate_object_name("a//abc").is_err());
+    assert!(validate_object_name("x/y//z").is_err());
+
+    // 非法示例：相对路径段 '.' 或 '..'
+    assert!(validate_object_name("./abc").is_err());
+    assert!(validate_object_name("../abc").is_err());
+    assert!(validate_object_name("abc/./def").is_err());
+    assert!(validate_object_name("abc/../def").is_err());
 }
 
 pub(crate) fn get_request_header(
