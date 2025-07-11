@@ -142,7 +142,7 @@ async fn put_object_test() {
         .x_metas([("key3", "value3"), ("key4", "value4")])
         .build()
         .send(
-            "/test/sample.toml",
+            "test/t-sample.toml",
             PutObjectBody::FilePath(Path::new("tests/oss/config.sample.toml")),
         )
         .await;
@@ -160,7 +160,7 @@ async fn get_object_test() {
     let res = client
         .get_object()
         .build()
-        .receive_bytes("/test/sample.toml")
+        .receive_bytes("test/t-sample.toml")
         .await;
 
     match res {
@@ -180,7 +180,7 @@ async fn get_object_by_download_test() {
         .get_object()
         .build()
         .download_to_file(
-            "/test/sample.toml",
+            "test/t-sample.toml",
             Path::new("tests/oss/sample_download.toml"),
         )
         .await;
@@ -198,7 +198,7 @@ async fn get_object_by_stream_test() {
     let res = client
         .get_object()
         .build()
-        .receive_bytes_stream("/test/sample.toml")
+        .receive_bytes_stream("test/t-sample.toml")
         .await;
 
     match res {
@@ -226,7 +226,7 @@ async fn copy_object_test() {
         .x_oss_copy_source("/utab-app/custom-image/01919e65-75f0-7590-b8a8-b3f22f705db8")
         .unwrap()
         .build()
-        .send(&client.bucket(), "/test/copy_img.jpg")
+        .send(&client.bucket(), "test/copy_img.jpg")
         .await;
 
     match resp {
@@ -244,7 +244,7 @@ async fn append_object_test() {
         .x_metas([("key1", "value1"), ("key2", "value2")])
         .content_type("text/plain")
         .build()
-        .send("/test/append_object.txt", 13, b"6666666".to_vec())
+        .send("test/append_object_2.txt", 0, b"6666666".to_vec())
         .await;
 
     match res {
@@ -256,7 +256,7 @@ async fn append_object_test() {
 #[tokio::test]
 async fn delete_object_test() {
     let client = get_oss_client();
-    let res = client.delete_object("/test/IMG_20240726_155048.jpg").await;
+    let res = client.delete_object("test/IMG_20240726_155048.jpg").await;
     match res {
         Ok(h) => println!("[success] header: {:#?}", h),
         Err(e) => println!("[error] {}", e),
@@ -266,7 +266,6 @@ async fn delete_object_test() {
 #[tokio::test]
 async fn delete_multiple_objects_test() {
     let client = get_oss_client();
-    // FIXME 这里的key为文件名称，即不需要`/`开头，这和其它地方使用的object_name不一致了（使用`/`开头），全部改为不以`/`开头的形式
     let objs = vec![
         ObjectToDelete {
             key: "test/copy_img.jpg",
@@ -286,7 +285,7 @@ async fn delete_multiple_objects_test() {
         .await;
 
     match res {
-        Ok(result) => println!("[success] deleted objects: {:#?}", result.deleted),
+        Ok(result) => println!("[success] deleted objects: {:#?}", result),
         Err(e) => println!("[error] {}", e),
     }
 }
@@ -297,7 +296,7 @@ async fn head_object_test() {
     let res = client
         .head_object()
         .build()
-        .send("/test/test_88888.txt")
+        .send("test/test_88888.txt")
         .await;
     match res {
         Ok(header) => println!("[success] header: {:#?}", header),
@@ -308,7 +307,7 @@ async fn head_object_test() {
 #[tokio::test]
 async fn get_object_meta_test() {
     let client = get_oss_client();
-    let res = client.get_object_meta("/test/test_88888.txt").await;
+    let res = client.get_object_meta("test/test_88888.txt").await;
     match res {
         Ok(meta) => println!("[success] meta: {:#?}", meta),
         Err(e) => println!("[error] {}", e),

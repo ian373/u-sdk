@@ -125,6 +125,28 @@ pub struct GetObjectResponseHeader {
 // endregion: --- get object
 
 // region:    --- copy object
+fn validate_source_name(source: &str) -> Result<(), Error> {
+    if source.is_empty() {
+        return Err(Error::Common(
+            "x-oss-copy-source cannot be empty".to_owned(),
+        ));
+    }
+
+    if !source.starts_with('/') {
+        return Err(Error::Common(
+            "x-oss-copy-source must start with '/'".to_owned(),
+        ));
+    }
+
+    match validate_object_name(&source[1..]) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(Error::Common(format!(
+            "x-oss-copy-source is invalid: {}",
+            e
+        ))),
+    }
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Builder, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -135,7 +157,7 @@ pub struct CopyObject<'a> {
 
     x_oss_forbid_overwrite: Option<&'a str>,
     #[builder(with = |s: &'a str| ->Result<_, Error> {
-        validate_object_name(s)?;
+        validate_source_name(s)?;
         Ok(s)
     })]
     pub(crate) x_oss_copy_source: &'a str,

@@ -21,7 +21,7 @@ use tokio_util::io::ReaderStream;
 
 impl<'a> PutObject<'a> {
     /// - `content_type`，不会进行MIME合法性检查
-    /// - `object_name`：遵守OSS的Object命名规则，必须以`/`开头
+    /// - `object_name`：遵守OSS的Object[命名规则](https://help.aliyun.com/zh/oss/user-guide/object-naming-conventions)
     /// - `data`：如果需要创建文件夹，object_name以`/`结尾，`Vec`大小为0即可
     pub async fn send(
         &self,
@@ -32,7 +32,7 @@ impl<'a> PutObject<'a> {
 
         let client = self.client;
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}{}", // url不能添加`/`结尾，因为是否有`/`由object_name决定
+            "https://{}.{}/{}", // url不能添加`/`结尾，因为是否有`/`由object_name决定
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
@@ -169,7 +169,7 @@ impl GetObject<'_> {
 
         let client = self.client;
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}{}",
+            "https://{}.{}/{}",
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
@@ -223,7 +223,7 @@ impl CopyObject<'_> {
 
         let client = self.client;
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}{}",
+            "https://{}.{}/{}",
             dest_bucket, client.endpoint, dest_object_name
         ))
         .unwrap();
@@ -257,7 +257,7 @@ impl AppendObject<'_> {
         let client = self.client;
         let request_url = url::Url::parse_with_params(
             &format!(
-                "https://{}.{}{}",
+                "https://{}.{}/{}",
                 client.bucket, client.endpoint, object_name
             ),
             [("append", ""), ("position", &position.to_string())],
@@ -314,7 +314,9 @@ impl AppendObject<'_> {
 }
 
 impl DeleteMultipleObjects<'_> {
-    pub async fn send(&self) -> Result<DeleteResult, Error> {
+    /// 如果`quiet`为`true`，响应体没有内容，返回None
+    /// 如果`quiet`为`false`，响应体包含删除结果，返回Some(DeleteResult)
+    pub async fn send(&self) -> Result<Option<DeleteResult>, Error> {
         let client = self.client;
 
         let request_url = url::Url::parse(&format!(
@@ -347,6 +349,7 @@ impl DeleteMultipleObjects<'_> {
             .send()
             .await?;
 
+        // 如果是is_quiet为true的请求，返回的xml中没有删除结果，使用Option来简化处理
         let data = parse_response(resp, ResponseBodyType::XML).await?;
         Ok(data)
     }
@@ -358,7 +361,7 @@ impl HeadObject<'_> {
 
         let client = self.client;
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}{}",
+            "https://{}.{}/{}",
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
@@ -430,7 +433,7 @@ impl Client {
         validate_object_name(object_name)?;
 
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}{}",
+            "https://{}.{}/{}",
             self.bucket, self.endpoint, object_name
         ))
         .unwrap();
@@ -485,7 +488,7 @@ impl Client {
         validate_object_name(object_name)?;
 
         let request_url = url::Url::parse(&format!(
-            "https://{}.{}{}?objectMeta",
+            "https://{}.{}/{}?objectMeta",
             self.bucket, self.endpoint, object_name
         ))
         .unwrap();
