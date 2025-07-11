@@ -1,5 +1,6 @@
-pub mod basic;
+mod basic;
 mod multipart_upload;
-
-pub mod types_rs;
+mod types_rs;
 pub(crate) mod utils;
+
+pub use types_rs::*;

@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use oss::object::types_rs::*;
+use oss::object::{ObjectToDelete, OssMetaExt, PutObjectBody};
 use serde::Deserialize;
 use std::path::Path;
 use u_sdk::oss;
