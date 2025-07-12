@@ -1,16 +1,24 @@
 //! 文本翻译
 
-pub mod trans;
-pub mod types_rs;
+use bon::bon;
 
-pub struct TransClient {
+mod error;
+pub use error::Error;
+
+mod trans;
+mod types_rs;
+pub use types_rs::*;
+
+pub struct Client {
     access_key_id: String,
     access_key_secret: String,
     http_client: reqwest::Client,
     host: String,
 }
 
-impl TransClient {
+#[bon]
+impl Client {
+    #[builder(on(String, into))]
     pub fn new(access_key_id: String, access_key_secret: String, host: String) -> Self {
         Self {
             access_key_id,

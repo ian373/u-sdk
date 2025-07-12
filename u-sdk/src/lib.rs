@@ -22,8 +22,6 @@
 //! - 调用相应API时请注意你的RAM用户是否有相应得权限
 //!
 
-pub mod error;
-
 #[cfg(feature = "email")]
 pub mod email;
 #[cfg(feature = "oss")]

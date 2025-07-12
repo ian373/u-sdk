@@ -1,6 +1,5 @@
-use u_sdk::translate::*;
-
 use serde::Deserialize;
+use u_sdk::translate::*;
 
 #[derive(Deserialize, Debug)]
 pub struct AliConfig {
@@ -17,40 +16,46 @@ impl AliConfig {
     }
 }
 
-fn get_trans_client() -> TransClient {
+fn get_trans_client() -> Client {
     let conf = AliConfig::get_conf();
-    TransClient::new(
-        conf.access_key_id,
-        conf.access_key_secret,
-        "mt.aliyuncs.com".to_owned(),
-    )
+    Client::builder()
+        .access_key_id(conf.access_key_id)
+        .access_key_secret(conf.access_key_secret)
+        .host("mt.cn-hangzhou.aliyuncs.com")
+        .build()
 }
 
 #[tokio::test]
 async fn translate_test() {
     let client = get_trans_client();
-    let query = types_rs::TranslateQuery {
-        format_type: "text".to_owned(),
-        source_language: "auto".to_owned(),
-        target_language: "zh".to_owned(),
-        source_text: "test first line.\ntest second line.".to_owned(),
-        scene: "general".to_owned(),
-        // scene: "description".to_owned(),
-        context: None,
-    };
-    let res = client.translate(query).await;
+    let res = client
+        .translate()
+        .format_type("text")
+        .source_language("auto")
+        .target_language("zh")
+        .source_text("test first line.\ntest second line.")
+        .scene("general")
+        .build()
+        .send()
+        .await;
+
     match res {
-        Ok(s) => println!("res:\n{:#?}", s),
-        Err(e) => println!("{:#?}", e),
+        Ok(s) => println!("[success] res:\n{:#?}", s),
+        Err(e) => println!("[error] {:#?}", e),
     }
 }
 
 #[tokio::test]
 async fn get_detect_language_test() {
     let client = get_trans_client();
-    let res = client.get_detect_language("中文").await;
+    let res = client
+        .get_detect_language()
+        .source_text("中文")
+        .build()
+        .send()
+        .await;
     match res {
-        Ok(s) => println!("res:\n{}", s),
-        Err(e) => println!("{:#?}", e),
+        Ok(s) => println!("[success] res: {}", s),
+        Err(e) => println!("[error] {:#?}", e),
     }
 }

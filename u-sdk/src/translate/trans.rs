@@ -1,30 +1,36 @@
-use super::TransClient;
+use super::Client;
+use super::Error;
 use super::types_rs::*;
-use crate::error::Error;
 use common_lib::helper::into_header_map;
 use common_lib::open_api_sign::{SignParams, get_common_headers};
 
 use std::collections::BTreeMap;
 
-/// > <a href="https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral" target="_blank">api文档地址</a>
-///
-/// 注意：使用翻译的不同的api，需要在控制台开启相应的服务
-impl TransClient {
+impl Client {
     /// 机器翻译-通用版和专业版
     ///
     /// 注意事项:
     /// 1. QPS限制50
-    /// 2. 字符长度上限是5000字符，
-    pub async fn translate(&self, query: TranslateQuery) -> Result<TransResponseDataPart, Error> {
-        if query.source_text.len() > 5000 {
-            return Err(Error::AnyError("字符长度上限是5000字符".to_owned()));
-        }
+    /// 2. 字符长度有上限，且需要自己检查长度
+    pub fn translate(&self) -> TranslateBuilder<'_> {
+        Translate::builder(self)
+    }
 
-        let query_map = serde_json::from_value(serde_json::to_value(&query).unwrap()).unwrap();
+    /// > <a href="https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-translategeneral" target="_blank">api文档地址</a>
+    ///
+    /// 注意：使用翻译的不同的api，需要在控制台开启相应的服务
+    pub fn get_detect_language(&self) -> GetDetectLanguageBuilder<'_> {
+        GetDetectLanguage::builder(self)
+    }
+}
 
+impl Translate<'_> {
+    pub async fn send(&self) -> Result<TranslateResponse, Error> {
+        let client = self.client;
+        let query_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         let mut sign_params = SignParams {
             req_method: "GET",
-            host: &self.host,
+            host: &client.host,
             query_map: &query_map,
             x_headers: None,
             body_bytes: None,
@@ -32,45 +38,46 @@ impl TransClient {
             x_acs_version: "2018-10-12",
             x_acs_security_token: None,
         };
-        if query.scene != "general" {
+        if self.scene != "general" {
             sign_params.x_acs_action = "Translate";
         }
 
-        let (common_headers, url_) =
-            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)
-                .map_err(|e| Error::AnyError(format!("get_common_headers error: {}", e)))?;
+        let (common_headers, url_) = get_common_headers(
+            &client.access_key_secret,
+            &client.access_key_id,
+            sign_params,
+        )
+        .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
-        let resp = self
+        let resp = client
             .http_client
             .get(url_)
             .headers(header_map)
             .send()
             .await?;
 
-        let res = resp.json::<TransRespCheckPart>().await?;
-        if res.code != "200" || res.data.is_none() {
-            Err(Error::AnyError(format!(
-                "msg:{}\ncode:{}",
-                res.message.unwrap_or("None".to_owned()),
-                res.code
-            )))
-        } else {
-            Ok(res.data.unwrap())
+        if !resp.status().is_success() {
+            return Err(Error::RequestAPIFailed {
+                code: resp.status().as_str().to_owned(),
+                message: format!("请求失败，状态码: {}", resp.status()),
+            });
         }
+
+        let res = resp.json().await?;
+        Ok(res)
     }
+}
 
-    pub async fn get_detect_language(&self, source_text: &str) -> Result<String, Error> {
-        if source_text.len() > 5000 {
-            return Err(Error::AnyError("字符长度上限是5000字符".to_owned()));
-        }
-
+impl GetDetectLanguage<'_> {
+    pub async fn send(&self) -> Result<String, Error> {
+        let client = self.client;
         let mut query_map = BTreeMap::new();
-        query_map.insert("SourceText".to_owned(), source_text.to_owned());
+        query_map.insert("SourceText".to_owned(), self.source_text.to_owned());
 
         let sign_params = SignParams {
             req_method: "GET",
-            host: &self.host,
+            host: &client.host,
             query_map: &query_map,
             x_headers: None,
             body_bytes: None,
@@ -79,12 +86,15 @@ impl TransClient {
             x_acs_security_token: None,
         };
 
-        let (common_headers, url_) =
-            get_common_headers(&self.access_key_secret, &self.access_key_id, sign_params)
-                .map_err(|e| Error::AnyError(format!("get_common_headers error: {}", e)))?;
+        let (common_headers, url_) = get_common_headers(
+            &client.access_key_secret,
+            &client.access_key_id,
+            sign_params,
+        )
+        .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
-        let resp = self
+        let resp = client
             .http_client
             .get(url_)
             .headers(header_map)
