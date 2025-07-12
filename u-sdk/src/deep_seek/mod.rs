@@ -1,29 +1,98 @@
-pub mod types;
+mod types;
+pub use types::*;
 
-use crate::deep_seek::types::{CheckBalanceResponse, FixedParams, Role};
+mod utils;
+
 use async_stream::stream;
+use bon::{Builder, bon};
+// REFACTOR 把这个改为使用tokio-stream的方法，统一一下
 use futures_util::{Stream, stream::StreamExt};
 use reqwest::StatusCode;
-use types::{ChatResponse, Message, RequestParams, StreamEvent, StreamEventData};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use serde::Serialize;
 
 const BASE_URL: &str = "https://api.deepseek.com";
 
-pub struct DeepSeek {
+//region client
+pub struct Client {
     api_key: String,
-    client: reqwest::Client,
-    fixed_params: FixedParams,
+    http_client: reqwest::Client,
 }
 
-impl DeepSeek {
-    pub fn new(api_key: &str) -> Self {
-        let fixed_params = FixedParams::default();
+#[bon]
+impl Client {
+    #[builder(on(String, into))]
+    pub fn new(api_key: String) -> Self {
+        let mut header_map = HeaderMap::new();
+        let mut auth_val = HeaderValue::from_str(&format!("Bearer {}", api_key)).unwrap();
+        auth_val.set_sensitive(true);
+        header_map.insert(AUTHORIZATION, auth_val);
+
+        let http_client = reqwest::Client::builder()
+            .default_headers(header_map)
+            .build()
+            .unwrap();
         Self {
-            api_key: api_key.to_string(),
-            client: reqwest::Client::new(),
-            fixed_params,
+            api_key,
+            http_client,
         }
     }
 
+    pub fn chat_builder(&self) -> ChatBuilder {
+        Chat::builder(self)
+    }
+
+    pub async fn check_balance(&self) -> Result<CheckBalanceResponse, String> {
+        let response = self
+            .http_client
+            .get(format!("{}/user/balance", BASE_URL))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        match response.status() {
+            StatusCode::OK => {
+                let response = response
+                    .json::<CheckBalanceResponse>()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                Ok(response)
+            }
+            status => Err(format!("Request failed with status: {}", status)),
+        }
+    }
+}
+//endregion
+
+//region chat
+#[derive(Builder, Serialize)]
+pub struct Chat<'a> {
+    #[builder(start_fn)]
+    #[serde(skip_serializing)]
+    pub(crate) client: &'a Client,
+    #[builder(field)]
+    stop: Vec<String>,
+    pub(crate) messages: &'a [Message],
+    model: &'a str,
+    frequency_penalty: Option<f32>, // Default 0.0 Possible values: >= -2 and <= 2
+    max_tokens: Option<u32>,        // Default 4096 Possible values: > 1
+    presence_penalty: Option<f32>,  // Default 0.0 Possible values: >= -2 and <= 2
+    response_format: Option<ResponseFormat<'a>>, // Default text
+    #[builder(default = false)]
+    pub(crate) stream: bool,
+    stream_options: Option<StreamOption>,
+    temperature: Option<f32>, // Default 1.0 Possible values: >= 0 and <= 2
+    top_p: Option<f32>,       // Default 1.0 Possible values: <= 1
+    // pub(crate) tools: Option<()>,
+    // #[serde(serialize_with = "serialize_tolls_choices")]
+    // pub(crate) tool_choice: Option<()>,
+    #[builder(default = false)]
+    logprobs: bool,
+    top_logprobs: Option<i32>, // Possible values: >= 0 and <= 20 指定此参数时，logprobs 必须为 true。
+}
+
+impl Chat<'_> {
     /// 多轮对话形式
     ///
     /// 发送的形式：
@@ -36,59 +105,66 @@ impl DeepSeek {
     /// // 或者直接是user
     /// {"content": "Hi", "role": "user" }
     /// ```
-    pub async fn chat(&mut self, msg_list: &[Message]) -> Result<ChatResponse, String> {
-        check_msg_list(msg_list)?;
+    pub async fn chat(&self) -> Result<ChatResponse, String> {
+        utils::check_msg_list(self.messages)?;
 
         // 防止 stream 为 true
-        if self.fixed_params.stream {
-            self.fixed_params.stream = false;
+        if self.stream {
+            return Err(
+                "Stream mode is not supported in this method. Use chat_by_stream instead."
+                    .to_string(),
+            );
         }
 
-        let request_params = RequestParams {
-            messages: msg_list,
-            fix_params: &self.fixed_params,
-        };
+        let client = self.client;
+        let resp = client
+            .http_client
+            .post(format!("{}/chat/completions", BASE_URL))
+            .json(self)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
 
-        let response = self.send(request_params).await?;
-        match response.status() {
-            StatusCode::OK => {
-                let response = response
-                    .json::<ChatResponse>()
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(response)
-            }
-            status => Err(format!("Request failed with status: {}", status)),
+        if !resp.status().is_success() {
+            return Err(format!("Request failed with status: {}", resp.status()));
         }
+
+        let response = resp
+            .json::<ChatResponse>()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(response)
     }
 
-    pub async fn chat_by_stream(
-        &mut self,
-        msg_list: &[Message],
-    ) -> Result<impl Stream<Item = StreamEvent>, String> {
-        check_msg_list(msg_list)?;
+    pub async fn chat_by_stream(&self) -> Result<impl Stream<Item = StreamEvent> + use<>, String> {
+        utils::check_msg_list(self.messages)?;
 
-        // 打开stream功能
-        self.fixed_params.stream = true;
-
-        let request_params = RequestParams {
-            messages: msg_list,
-            fix_params: &self.fixed_params,
-        };
-
-        let response = self.send(request_params).await?;
-        if !response.headers().contains_key("content-type")
-            || !response.headers()["content-type"]
-                .to_str()
-                .unwrap_or("")
-                .starts_with("text/event-stream")
-        {
-            return Err("Expected content-type: text/event-stream".to_string());
+        if !self.stream {
+            return Err("Stream mode is not enabled. Set stream to true.".to_string());
         }
 
-        let mut body = response.bytes_stream();
+        let client = self.client;
+        let resp = client
+            .http_client
+            .post(format!("{}/chat/completions", BASE_URL))
+            .json(self)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !resp.status().is_success() {
+            return Err(format!(
+                "statues: {}\n text: {}",
+                resp.status(),
+                resp.text().await.unwrap()
+            ));
+        }
+
+        let mut body = resp.bytes_stream();
         let mut buffer = String::new();
 
+        // REFACTOR 需要优化，应该是buf为字节，然后判断b"\n\n"这种
         let s = stream! {
             'req_stream: while let Some(chunk) = body.next().await {
                 let chunk = chunk.unwrap();
@@ -123,51 +199,5 @@ impl DeepSeek {
 
         Ok(Box::pin(s))
     }
-
-    async fn send(&self, params: RequestParams<'_>) -> Result<reqwest::Response, String> {
-        let response = self
-            .client
-            .post(format!("{}/chat/completions", BASE_URL))
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&params)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(response)
-    }
-
-    pub async fn check_balance(&self) -> Result<CheckBalanceResponse, String> {
-        let response = self
-            .client
-            .get(format!("{}/user/balance", BASE_URL))
-            .header("Accept", "application/json")
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-
-        match response.status() {
-            StatusCode::OK => {
-                let response = response
-                    .json::<CheckBalanceResponse>()
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(response)
-            }
-            status => Err(format!("Request failed with status: {}", status)),
-        }
-    }
 }
-
-fn check_msg_list(msg_list: &[Message]) -> Result<(), String> {
-    // 多轮对话的形式
-
-    if msg_list.is_empty() {
-        return Err("msg_list is empty".to_string());
-    } else if msg_list.last().unwrap().role != Role::User {
-        // 最后一条消息必须是 User
-        return Err("The last message role must be User".to_string());
-    }
-
-    Ok(())
-}
+//endregion

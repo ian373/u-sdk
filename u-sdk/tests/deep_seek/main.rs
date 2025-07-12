@@ -1,6 +1,7 @@
 use futures_util::StreamExt;
 use serde::Deserialize;
-use u_sdk::deep_seek::types::{Role, StreamEvent};
+use u_sdk::deep_seek::Client;
+use u_sdk::deep_seek::{Message, Role, StreamEvent};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -20,11 +21,9 @@ fn get_key() {
 }
 
 #[tokio::test]
-async fn chat() {
-    use u_sdk::deep_seek::types::Message;
-
+async fn chat_test() {
     let token = get_deep_seek_key();
-    let mut client = u_sdk::deep_seek::DeepSeek::new(&token);
+    let client = Client::builder().api_key(token).build();
     let mut msg_list = vec![
         Message {
             content: "You are a helpful assistant.".to_string(),
@@ -35,28 +34,24 @@ async fn chat() {
             role: Role::User,
         },
     ];
-    let response = client.chat(&msg_list).await;
-    match response {
-        Ok(mut resp) => {
-            let answer = resp.choices.pop().unwrap();
-            msg_list.push(Message {
-                content: answer.message.content,
-                role: answer.message.role,
-            });
-            println!("{:#?}", msg_list);
-        }
-        Err(e) => {
-            println!("{:#?}", e);
-        }
+    let resp = client
+        .chat_builder()
+        .messages(&mut msg_list)
+        .model("deepseek-chat")
+        .build()
+        .chat()
+        .await;
+
+    match resp {
+        Ok(response) => println!("Response: {:#?}", response),
+        Err(e) => println!("Error: {}", e),
     }
 }
 
 #[tokio::test]
-async fn chat_by_stream() {
-    use u_sdk::deep_seek::types::Message;
-
+async fn chat_by_stream_test() {
     let token = get_deep_seek_key();
-    let mut client = u_sdk::deep_seek::DeepSeek::new(&token);
+    let client = Client::builder().api_key(token).build();
     let msg_list = vec![
         Message {
             content: "You are a helpful assistant.".to_string(),
@@ -68,9 +63,14 @@ async fn chat_by_stream() {
         },
     ];
     let mut stream = client
-        .chat_by_stream(&msg_list)
+        .chat_builder()
+        .stream(true)
+        .messages(&msg_list)
+        .model("deepseek-chat")
+        .build()
+        .chat_by_stream()
         .await
-        .expect("chat_by_stream error");
+        .expect("Failed to create stream");
     let mut s = String::new();
     while let Some(event) = stream.next().await {
         println!("{:#?}", event);
@@ -92,7 +92,7 @@ async fn chat_by_stream() {
 #[tokio::test]
 async fn check_balance_test() {
     let token = get_deep_seek_key();
-    let client = u_sdk::deep_seek::DeepSeek::new(&token);
+    let client = Client::builder().api_key(token).build();
     let balance = client.check_balance().await;
     match balance {
         Ok(b) => {

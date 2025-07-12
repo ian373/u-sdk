@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug)]
 pub struct Message {
@@ -6,7 +6,7 @@ pub struct Message {
     pub role: Role,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     System,
@@ -15,23 +15,9 @@ pub enum Role {
 }
 
 #[derive(Serialize, Debug)]
-pub(crate) enum Model {
-    #[serde(rename = "deepseek-chat")]
-    DeepSeekChat,
-}
-
-#[derive(Serialize, Debug)]
-pub(crate) struct ResponseFormat {
+pub(crate) struct ResponseFormat<'a> {
     #[serde(rename = "type")]
-    pub(crate) r#type: ResponseFormatType,
-}
-
-#[derive(Serialize, Debug)]
-pub(crate) enum ResponseFormatType {
-    #[serde(rename = "text")]
-    Text,
-    #[serde(rename = "json_object")]
-    JsonObject,
+    pub(crate) r#type: &'a str,
 }
 
 #[derive(Serialize, Debug)]
@@ -39,80 +25,7 @@ pub(crate) struct StreamOption {
     pub(crate) include_usage: bool,
 }
 
-#[derive(Serialize, Debug)]
-pub(crate) struct RequestParams<'a> {
-    pub(crate) messages: &'a [Message],
-    #[serde(flatten)]
-    pub(crate) fix_params: &'a FixedParams,
-}
-
-#[derive(Serialize, Debug)]
-pub(crate) struct FixedParams {
-    pub(crate) model: Model,
-    pub(crate) frequency_penalty: Option<f32>, // Default 0.0 Possible values: >= -2 and <= 2
-    pub(crate) max_tokens: Option<i32>,        // Default 4096 Possible values: > 1
-    pub(crate) presence_penalty: Option<f32>,  // Default 0.0 Possible values: >= -2 and <= 2
-    pub(crate) response_format: Option<ResponseFormat>, // Default text
-    pub(crate) stop: Option<()>,
-    pub(crate) stream: bool,
-    pub(crate) stream_options: Option<StreamOption>,
-    pub(crate) temperature: Option<f32>, // Default 1.0 Possible values: >= 0 and <= 2
-    pub(crate) top_p: Option<f32>,       // Default 1.0 Possible values: <= 1
-    pub(crate) tools: Option<()>,
-    #[serde(serialize_with = "serialize_tolls_choices")]
-    pub(crate) tool_choice: Option<()>,
-    pub(crate) logprobs: bool,
-    pub(crate) top_logprobs: Option<i32>, // Possible values: >= 0 and <= 20 指定此参数时，logprobs 必须为 true。
-}
-
-impl Default for FixedParams {
-    fn default() -> Self {
-        Self {
-            model: Model::DeepSeekChat,
-            frequency_penalty: Some(0.0),
-            max_tokens: Some(4096),
-            presence_penalty: Some(0.0),
-            response_format: Some(ResponseFormat {
-                r#type: ResponseFormatType::Text,
-            }),
-            stop: None,
-            stream: false,
-            stream_options: None,
-            temperature: Some(1.0),
-            top_p: Some(1.0),
-            tools: None,
-            tool_choice: None,
-            logprobs: false,
-            top_logprobs: None,
-        }
-    }
-}
-
-fn serialize_tolls_choices<S>(value: &Option<()>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        Some(v) => serializer.serialize_some(v), // 如果是 Some，正常序列化
-        None => serializer.serialize_some("none"), // 如果是 None，序列化为 "none"
-    }
-}
-
-#[test]
-fn serialize_request_params() {
-    let json = serde_json::to_string_pretty(&RequestParams {
-        messages: &[Message {
-            content: "You are a helpful assistant.".to_string(),
-            role: Role::System,
-        }],
-        fix_params: &FixedParams::default(),
-    })
-    .unwrap();
-    println!("{}", json);
-}
-
 // chat response
-
 #[derive(Debug, Deserialize)]
 pub struct ChatResponse {
     pub id: String,
