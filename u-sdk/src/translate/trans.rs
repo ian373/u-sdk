@@ -1,9 +1,9 @@
 use super::Client;
 use super::Error;
 use super::types_rs::*;
+use crate::translate::utils::parse_json_response;
 use common_lib::helper::into_header_map;
 use common_lib::open_api_sign::{SignParams, get_common_headers};
-
 use std::collections::BTreeMap;
 
 impl Client {
@@ -57,14 +57,7 @@ impl Translate<'_> {
             .send()
             .await?;
 
-        if !resp.status().is_success() {
-            return Err(Error::RequestAPIFailed {
-                code: resp.status().as_str().to_owned(),
-                message: format!("请求失败，状态码: {}", resp.status()),
-            });
-        }
-
-        let res = resp.json().await?;
+        let res = parse_json_response(resp).await?;
         Ok(res)
     }
 }
@@ -101,8 +94,7 @@ impl GetDetectLanguage<'_> {
             .send()
             .await?;
 
-        let res = resp.json::<GetDetectLanguageResp>().await?;
-
+        let res = parse_json_response::<GetDetectLanguageResp>(resp).await?;
         Ok(res.detected_language)
     }
 }

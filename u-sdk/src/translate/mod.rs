@@ -7,6 +7,8 @@ pub use error::Error;
 
 mod trans;
 mod types_rs;
+mod utils;
+
 pub use types_rs::*;
 
 pub struct Client {
