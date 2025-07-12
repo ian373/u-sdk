@@ -1,7 +1,7 @@
 //! [API 文档](https://help.aliyun.com/zh/oss/developer-reference/describeregions)
 
 use super::Client;
-use super::utils::{ResponseBodyType, get_request_header_with_bucket_region, parse_response};
+use super::utils::{get_request_header_with_bucket_region, parse_xml_response};
 use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use bon::Builder;
@@ -58,7 +58,7 @@ impl DescribeRegions<'_> {
             .send()
             .await?;
 
-        let res = parse_response(resp, ResponseBodyType::XML).await?;
+        let res = parse_xml_response(resp).await?;
         Ok(res)
     }
 }

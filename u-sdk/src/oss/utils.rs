@@ -50,15 +50,9 @@ pub(crate) async fn into_request_failed_error(resp: reqwest::Response) -> Error 
     }
 }
 
-pub(crate) enum ResponseBodyType {
-    XML,
-    Json,
-}
-
 // TODO 放到common-lib中供全局使用
-pub(crate) async fn parse_response<T: serde::de::DeserializeOwned>(
+pub(crate) async fn parse_xml_response<T: serde::de::DeserializeOwned>(
     resp: reqwest::Response,
-    body_type: ResponseBodyType,
 ) -> Result<T, Error> {
     let status = resp.status();
 
@@ -66,18 +60,10 @@ pub(crate) async fn parse_response<T: serde::de::DeserializeOwned>(
         return Err(into_request_failed_error(resp).await);
     }
 
-    match body_type {
-        ResponseBodyType::XML => {
-            let text = resp.text().await?;
-            let data = quick_xml::de::from_str(&text)
-                .map_err(|e| Error::Common(format!("XML parse error: {}", e)))?;
-            Ok(data)
-        }
-        ResponseBodyType::Json => {
-            let data = resp.json::<T>().await?;
-            Ok(data)
-        }
-    }
+    let text = resp.text().await?;
+    let data = quick_xml::de::from_str(&text)
+        .map_err(|e| Error::Common(format!("XML parse error: {}", e)))?;
+    Ok(data)
 }
 
 // 用 buffer 读文件并计算MD5

@@ -7,8 +7,8 @@ use crate::oss::Client;
 use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
-    ResponseBodyType, compute_md5_from_file, get_content_md5, get_request_header,
-    into_request_failed_error, parse_response, validate_object_name,
+    compute_md5_from_file, get_content_md5, get_request_header, into_request_failed_error,
+    parse_xml_response, validate_object_name,
 };
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
@@ -238,7 +238,7 @@ impl CopyObject<'_> {
             .send()
             .await?;
 
-        let data = parse_response(resp, ResponseBodyType::XML).await?;
+        let data = parse_xml_response(resp).await?;
         Ok(data)
     }
 }
@@ -350,7 +350,7 @@ impl DeleteMultipleObjects<'_> {
             .await?;
 
         // 如果是is_quiet为true的请求，返回的xml中没有删除结果，使用Option来简化处理
-        let data = parse_response(resp, ResponseBodyType::XML).await?;
+        let data = parse_xml_response(resp).await?;
         Ok(data)
     }
 }

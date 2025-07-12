@@ -5,8 +5,8 @@
 use super::Client;
 use super::sign_v4::HTTPVerb;
 use super::utils::{
-    ResponseBodyType, get_request_header, get_request_header_with_bucket_region,
-    into_request_failed_error, parse_response,
+    get_request_header, get_request_header_with_bucket_region, into_request_failed_error,
+    parse_xml_response,
 };
 use crate::oss::Error;
 use bon::Builder;
@@ -177,7 +177,7 @@ impl ListObjectsV2<'_> {
             .send()
             .await?;
 
-        let res = parse_response(resp, ResponseBodyType::XML).await?;
+        let res = parse_xml_response(resp).await?;
         Ok(res)
     }
 }
@@ -258,7 +258,7 @@ impl GetBucketInfo<'_> {
             .send()
             .await?;
 
-        let res = parse_response(resp, ResponseBodyType::XML).await?;
+        let res = parse_xml_response(resp).await?;
         Ok(res)
     }
 }
@@ -297,7 +297,7 @@ impl GetBucketLocation<'_> {
             .send()
             .await?;
 
-        let res = parse_response::<LocationConstraint>(resp, ResponseBodyType::XML).await?;
+        let res = parse_xml_response::<LocationConstraint>(resp).await?;
         Ok(res.field)
     }
 }
@@ -354,7 +354,7 @@ impl GetBucketStat<'_> {
             .send()
             .await?;
 
-        let res = parse_response(resp, ResponseBodyType::XML).await?;
+        let res = parse_xml_response(resp).await?;
         Ok(res)
     }
 }

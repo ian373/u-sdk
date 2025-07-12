@@ -1,6 +1,6 @@
 use super::Client;
 use super::sign_v4::HTTPVerb;
-use super::utils::{ResponseBodyType, parse_response};
+use super::utils::parse_xml_response;
 use crate::oss::Error;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
@@ -113,7 +113,7 @@ impl ListBuckets<'_> {
             .send()
             .await?;
 
-        let res = parse_response(resp, ResponseBodyType::XML).await?;
+        let res = parse_xml_response(resp).await?;
         Ok(res)
     }
 }
