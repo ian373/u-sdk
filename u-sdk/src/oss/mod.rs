@@ -12,7 +12,7 @@
 pub mod bucket;
 pub mod object;
 pub mod region;
-// pub mod service;
+pub mod service;
 
 mod error;
 pub use error::Error;

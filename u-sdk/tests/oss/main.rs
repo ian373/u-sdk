@@ -33,20 +33,15 @@ fn get_oss_client() -> oss::Client {
         .build()
 }
 
-// #[tokio::test]
-// async fn list_buckets_test() {
-//     let client = get_oss_client();
-//
-//     let query = oss::service::ListBucketsQueryParams {
-//         prefix: Some("test"),
-//         ..Default::default()
-//     };
-//     let res = client.list_buckets(None, Some(query)).await;
-//     match res {
-//         Ok(s) => println!("res:\n{:#?}", s),
-//         Err(e) => println!("{}", e),
-//     }
-// }
+#[tokio::test]
+async fn list_buckets_test() {
+    let client = get_oss_client();
+    let res = client.list_buckets().build().send().await;
+    match res {
+        Ok(buckets) => println!("[success] buckets: {:#?}", buckets),
+        Err(e) => println!("[error] {}", e),
+    }
+}
 
 #[tokio::test]
 async fn describe_regions_test() {

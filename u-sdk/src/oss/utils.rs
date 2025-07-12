@@ -198,9 +198,12 @@ pub(crate) fn get_request_header_with_bucket_region(
     let mut canonical_header = BTreeMap::new();
     canonical_header.extend(sign_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
 
+    // x-oss-content-sha256是必须存在且值固定
     canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
+    // host为addition_header中指定的需要额外添加到签名计算中的参数
     canonical_header.insert("host", request_url.host_str().unwrap());
 
+    // 添加host到additional_header，因为canonical_header中把host也参与签名计算了
     let mut additional_header = BTreeSet::new();
     additional_header.insert("host");
     let now = time::OffsetDateTime::now_utc();
