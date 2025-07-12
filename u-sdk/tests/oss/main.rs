@@ -48,15 +48,20 @@ fn get_oss_client() -> oss::Client {
 //     }
 // }
 
-// #[tokio::test]
-// async fn describe_regions_test() {
-//     let client = get_oss_client();
-//     let res = client.describe_regions(Some("oss-ap-northeast-1")).await;
-//     match res {
-//         Ok(s) => println!("res:\n{:#?}", s),
-//         Err(e) => println!("{}", e),
-//     }
-// }
+#[tokio::test]
+async fn describe_regions_test() {
+    let client = get_oss_client();
+    let res = client
+        .describe_regions()
+        .region("oss-cn-hangzhou")
+        .build()
+        .send()
+        .await;
+    match res {
+        Ok(region_info_list) => println!("[success] region info list: {:#?}", region_info_list),
+        Err(e) => println!("[error] {}", e),
+    }
+}
 
 #[tokio::test]
 async fn put_bucket_test() {

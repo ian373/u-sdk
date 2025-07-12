@@ -11,7 +11,7 @@
 
 pub mod bucket;
 pub mod object;
-// pub mod region;
+pub mod region;
 // pub mod service;
 
 mod error;

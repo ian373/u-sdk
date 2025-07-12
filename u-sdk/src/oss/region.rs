@@ -1,14 +1,20 @@
 //! [API 文档](https://help.aliyun.com/zh/oss/developer-reference/describeregions)
 
 use super::Client;
-use super::utils::{handle_response_status, into_request_header};
-use crate::error::Error;
-use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
-use common_lib::helper::gmt_format;
-
+use super::utils::{ResponseBodyType, get_request_header_with_bucket_region, parse_response};
+use crate::oss::Error;
+use crate::oss::sign_v4::HTTPVerb;
+use bon::Builder;
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::HashMap;
 use url::Url;
+
+#[derive(Builder)]
+pub struct DescribeRegions<'a> {
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+    pub(crate) region: Option<&'a str>,
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -25,49 +31,40 @@ pub struct RegionInfo {
     pub accelerate_endpoint: String,
 }
 
-/// region API
-impl Client {
+impl DescribeRegions<'_> {
     /// - `region`: 如果为`None`，则查询所有支持地域对应的Endpoint信息
-    pub async fn describe_regions(&self, region: Option<&str>) -> Result<RegionInfoList, Error> {
+    pub async fn send(&self) -> Result<RegionInfoList, Error> {
+        let client = self.client;
+
         let request_url = Url::parse_with_params(
-            &format!("https://{}", self.endpoint),
-            [("regions", region.unwrap_or_default())],
+            &format!("https://{}", client.endpoint),
+            [("regions", self.region.unwrap_or_default())],
         )
         .unwrap();
 
-        let mut canonical_header = BTreeMap::new();
-        canonical_header.insert("x-oss-content-sha256", "UNSIGNED-PAYLOAD");
-        canonical_header.insert("host", request_url.host_str().unwrap());
+        let header_map = get_request_header_with_bucket_region(
+            client,
+            HashMap::with_capacity(0),
+            &request_url,
+            HTTPVerb::Get,
+            &client.region,
+            None,
+        );
 
-        let mut additional_header = BTreeSet::new();
-        additional_header.insert("host");
-        let now = time::OffsetDateTime::now_utc();
-        let sign_v4_param = SignV4Param {
-            signing_region: &self.region,
-            http_verb: HTTPVerb::Get,
-            uri: &request_url,
-            bucket: None,
-            header_map: &canonical_header,
-            additional_header: Some(&additional_header),
-            date_time: &now,
-        };
-        let authorization = self.sign_v4(sign_v4_param);
-
-        let mut header = canonical_header.into_iter().collect::<HashMap<_, _>>();
-        header.insert("Authorization", &authorization);
-        let gmt = gmt_format(&now);
-        header.insert("Date", &gmt);
-        let header_map = into_request_header(header);
-
-        let resp = self
+        let resp = client
             .http_client
             .get(request_url)
             .headers(header_map)
             .send()
             .await?;
-        let text = handle_response_status(resp).await?;
-        let res = quick_xml::de::from_str(&text)?;
 
+        let res = parse_response(resp, ResponseBodyType::XML).await?;
         Ok(res)
+    }
+}
+
+impl Client {
+    pub fn describe_regions(&self) -> DescribeRegionsBuilder {
+        DescribeRegions::builder(self)
     }
 }
