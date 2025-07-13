@@ -1,8 +1,9 @@
 [package]
 name = "u-sdk"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
-description = "SDKs for some applications"
+description = "Some useful SDKs"
+keywords = ["aliyun", "oss", "serverchan", "deepseek"]
 license = "MIT"
 repository = "https://github.com/ian373/u-sdk"
 
@@ -12,14 +13,14 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 email = []
-oss = ["dep:quick-xml", "dep:tokio", "dep:tokio-util", "reqwest/stream", "dep:bytes"]
+oss = ["dep:quick-xml", "dep:tokio", "dep:tokio-util", "reqwest/stream", "dep:bytes", "dep:tokio-stream"]
 # 机器翻译
 translate = []
 server_chan = []
 deep_seek = ["reqwest/stream", "dep:async-stream", "dep:tokio-stream"]
 
 [dependencies]
-common-lib = { path = "../common-lib" }
+common-lib = { path = "../common-lib", version = "0.1.0" }
 # 签名相关
 url = { workspace = true }
 percent-encoding = { workspace = true }
