@@ -1,0 +1,50 @@
+[package]
+name = "u-sdk"
+version = "0.2.0"
+edition = "2024"
+description = "Some useful SDKs"
+keywords = ["aliyun", "oss", "serverchan", "deepseek"]
+license = "MIT"
+repository = "https://github.com/ian373/u-sdk"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+email = []
+oss = ["dep:quick-xml", "dep:tokio", "dep:tokio-util", "reqwest/stream", "dep:bytes", "dep:tokio-stream"]
+# 机器翻译
+translate = []
+server_chan = []
+deep_seek = ["reqwest/stream", "dep:async-stream", "dep:tokio-stream"]
+
+[dependencies]
+u-sdk-common = { path = "../u-sdk-common", version = "0.1.0" }
+# 签名相关
+url = { workspace = true }
+percent-encoding = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+base64 = { workspace = true }
+hex = { workspace = true }
+md-5 = { workspace = true }
+
+reqwest = { workspace = true }
+async-stream = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+uuid = { workspace = true }
+quick-xml = { workspace = true, optional = true }
+bon = { workspace = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { version = "^1.45.1", features = ["full"] }
+toml = "^0.8.23"
