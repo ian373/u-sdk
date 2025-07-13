@@ -5,17 +5,15 @@ mod utils;
 
 use async_stream::stream;
 use bon::{Builder, bon};
-// REFACTOR 把这个改为使用tokio-stream的方法，统一一下
-use futures_util::{Stream, stream::StreamExt};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Serialize;
+use tokio_stream::{Stream, StreamExt};
 
 const BASE_URL: &str = "https://api.deepseek.com";
 
 //region client
 pub struct Client {
-    api_key: String,
     http_client: reqwest::Client,
 }
 
@@ -32,10 +30,8 @@ impl Client {
             .default_headers(header_map)
             .build()
             .unwrap();
-        Self {
-            api_key,
-            http_client,
-        }
+
+        Self { http_client }
     }
 
     pub fn chat_builder(&self) -> ChatBuilder {
@@ -46,7 +42,6 @@ impl Client {
         let response = self
             .http_client
             .get(format!("{}/user/balance", BASE_URL))
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .send()
             .await
             .map_err(|e| e.to_string())?;

@@ -16,7 +16,7 @@ oss = ["dep:quick-xml", "dep:tokio", "dep:tokio-util", "reqwest/stream", "dep:by
 # 机器翻译
 translate = []
 server_chan = []
-deep_seek = ["reqwest/stream", "dep:async-stream", "dep:futures-util"]
+deep_seek = ["reqwest/stream", "dep:async-stream", "dep:tokio-stream"]
 
 [dependencies]
 common-lib = { path = "../common-lib" }
@@ -31,7 +31,7 @@ md-5 = { workspace = true }
 
 reqwest = { workspace = true }
 async-stream = { workspace = true, optional = true }
-futures-util = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

@@ -11,12 +11,12 @@ use crate::oss::utils::{
     parse_xml_response, validate_object_name,
 };
 use bytes::Bytes;
-use futures_util::{Stream, StreamExt};
 use reqwest::Body;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::Path;
 use tokio::io::AsyncWriteExt;
+use tokio_stream::{Stream, StreamExt};
 use tokio_util::io::ReaderStream;
 
 impl<'a> PutObject<'a> {

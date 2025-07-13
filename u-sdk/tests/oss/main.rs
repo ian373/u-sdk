@@ -1,7 +1,7 @@
-use futures_util::StreamExt;
 use oss::object::{ObjectToDelete, OssMetaExt, PutObjectBody};
 use serde::Deserialize;
 use std::path::Path;
+use tokio_stream::StreamExt;
 use u_sdk::oss;
 
 #[derive(Deserialize, Debug)]

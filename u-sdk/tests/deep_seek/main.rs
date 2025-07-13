@@ -1,5 +1,5 @@
-use futures_util::StreamExt;
 use serde::Deserialize;
+use tokio_stream::StreamExt;
 use u_sdk::deep_seek::Client;
 use u_sdk::deep_seek::{Message, Role, StreamEvent};
 
