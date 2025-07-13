@@ -130,16 +130,14 @@ impl GetObject<'_> {
         object_name: &str,
     ) -> Result<
         (
-            impl Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>> + use<>,
+            impl Stream<Item = Result<Bytes, Error>> + use<>,
             GetObjectResponseHeader,
         ),
         Error,
     > {
         let (resp, response_header) = self.get_response(object_name).await?;
 
-        let byte_stream = resp
-            .bytes_stream()
-            .map(|item| item.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>));
+        let byte_stream = resp.bytes_stream().map(|item| item.map_err(Error::Reqwest));
 
         Ok((byte_stream, response_header))
     }
