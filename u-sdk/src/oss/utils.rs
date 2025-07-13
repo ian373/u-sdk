@@ -1,6 +1,5 @@
 use crate::oss::Client;
 use crate::oss::Error;
-use crate::oss::object::utils::partition_header;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use base64::{Engine, engine::general_purpose};
 use common_lib::helper::gmt_format;
@@ -229,4 +228,21 @@ pub(crate) fn get_request_header(
         &client.region,
         Some(&client.bucket),
     )
+}
+
+// 将Header分为需要参与签名的Header和剩余Header
+fn partition_header(
+    header_map: HashMap<String, String>,
+) -> (HashMap<String, String>, HashMap<String, String>) {
+    let mut sign_map = HashMap::new();
+    let mut remaining_map = HashMap::new();
+    for (k, v) in header_map {
+        let k = k.to_lowercase();
+        if k == "content-type" || k == "content-md5" || k.starts_with("x-oss-") {
+            sign_map.insert(k, v);
+        } else {
+            remaining_map.insert(k, v);
+        }
+    }
+    (sign_map, remaining_map)
 }
