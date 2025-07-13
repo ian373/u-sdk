@@ -1,11 +1,13 @@
 mod types;
 pub use types::*;
 
+mod error;
 mod utils;
+pub use error::Error;
 
 use async_stream::stream;
 use bon::{Builder, bon};
-use reqwest::StatusCode;
+use common_lib::helper::{into_request_failed_error, parse_json_response};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Serialize;
 use tokio_stream::{Stream, StreamExt};
@@ -38,24 +40,15 @@ impl Client {
         Chat::builder(self)
     }
 
-    pub async fn check_balance(&self) -> Result<CheckBalanceResponse, String> {
-        let response = self
+    pub async fn check_balance(&self) -> Result<CheckBalanceResponse, Error> {
+        let resp = self
             .http_client
             .get(format!("{}/user/balance", BASE_URL))
             .send()
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
-        match response.status() {
-            StatusCode::OK => {
-                let response = response
-                    .json::<CheckBalanceResponse>()
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(response)
-            }
-            status => Err(format!("Request failed with status: {}", status)),
-        }
+        let res = parse_json_response(resp).await?;
+        Ok(res)
     }
 }
 //endregion
@@ -100,15 +93,14 @@ impl Chat<'_> {
     /// // 或者直接是user
     /// {"content": "Hi", "role": "user" }
     /// ```
-    pub async fn chat(&self) -> Result<ChatResponse, String> {
+    pub async fn chat(&self) -> Result<ChatResponse, Error> {
         utils::check_msg_list(self.messages)?;
 
         // 防止 stream 为 true
         if self.stream {
-            return Err(
-                "Stream mode is not supported in this method. Use chat_by_stream instead."
-                    .to_string(),
-            );
+            return Err(Error::Common(
+                "Stream mode is enabled. Use chat_by_stream instead.".to_string(),
+            ));
         }
 
         let client = self.client;
@@ -117,26 +109,19 @@ impl Chat<'_> {
             .post(format!("{}/chat/completions", BASE_URL))
             .json(self)
             .send()
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
-        if !resp.status().is_success() {
-            return Err(format!("Request failed with status: {}", resp.status()));
-        }
-
-        let response = resp
-            .json::<ChatResponse>()
-            .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(response)
+        let res = parse_json_response(resp).await?;
+        Ok(res)
     }
 
-    pub async fn chat_by_stream(&self) -> Result<impl Stream<Item = StreamEvent> + use<>, String> {
+    pub async fn chat_by_stream(&self) -> Result<impl Stream<Item = StreamEvent> + use<>, Error> {
         utils::check_msg_list(self.messages)?;
 
         if !self.stream {
-            return Err("Stream mode is not enabled. Set stream to true.".to_string());
+            return Err(Error::Common(
+                "Stream mode is not enabled. Use chat instead.".to_string(),
+            ));
         }
 
         let client = self.client;
@@ -145,15 +130,10 @@ impl Chat<'_> {
             .post(format!("{}/chat/completions", BASE_URL))
             .json(self)
             .send()
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
         if !resp.status().is_success() {
-            return Err(format!(
-                "statues: {}\n text: {}",
-                resp.status(),
-                resp.text().await.unwrap()
-            ));
+            return Err(into_request_failed_error(resp).await.into());
         }
 
         let mut body = resp.bytes_stream();

@@ -1,3 +1,4 @@
+use crate::Error;
 use hmac::{Hmac, Mac};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use sha1::Sha1;
@@ -39,4 +40,46 @@ pub fn sign_hmac_sha1(secret: &str, str_to_sign: &str) -> Vec<u8> {
     let mut mac = HmacSha1::new_from_slice(secret.as_bytes()).unwrap();
     mac.update(str_to_sign.as_bytes());
     mac.finalize().into_bytes().to_vec()
+}
+
+pub async fn into_request_failed_error(resp: reqwest::Response) -> Error {
+    let status = resp.status();
+    let body = resp.text().await;
+    match body {
+        Ok(message) => Error::RequestAPIFailed {
+            status: status.to_string(),
+            message,
+        },
+        Err(e) => Error::Reqwest(e),
+    }
+}
+
+pub async fn parse_json_response<T: serde::de::DeserializeOwned>(
+    resp: reqwest::Response,
+) -> Result<T, Error> {
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Err(into_request_failed_error(resp).await);
+    }
+
+    let text = resp.text().await?;
+    let data = serde_json::from_str(&text)
+        .map_err(|e| Error::Common(format!("JSON parse error: {}", e)))?;
+    Ok(data)
+}
+
+pub async fn parse_xml_response<T: serde::de::DeserializeOwned>(
+    resp: reqwest::Response,
+) -> Result<T, Error> {
+    let status = resp.status();
+
+    if !status.is_success() {
+        return Err(into_request_failed_error(resp).await);
+    }
+
+    let text = resp.text().await?;
+    let data = quick_xml::de::from_str(&text)
+        .map_err(|e| Error::Common(format!("XML parse error: {}", e)))?;
+    Ok(data)
 }
