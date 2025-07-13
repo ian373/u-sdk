@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use tokio_stream::StreamExt;
 use u_sdk::deep_seek::Client;
-use u_sdk::deep_seek::{Message, Role, StreamEvent};
+use u_sdk::deep_seek::{Message, Role};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -71,22 +71,24 @@ async fn chat_by_stream_test() {
         .chat_by_stream()
         .await
         .expect("Failed to create stream");
-    let mut s = String::new();
+
+    let mut answer = String::new();
     while let Some(event) = stream.next().await {
         println!("{:#?}", event);
         match event {
-            StreamEvent::Data(mut data) => {
-                let answer = data.choices.pop().unwrap();
-                s.push_str(&answer.delta.content.unwrap_or("".to_string()));
+            Ok(mut data) => {
+                let chunk = data
+                    .choices
+                    .pop()
+                    .and_then(|c| c.delta.content)
+                    .unwrap_or_default();
+                answer.push_str(&chunk);
             }
-            StreamEvent::Unknown(u) => {
-                println!("unknown:\n{}", u);
-            }
-            _ => (),
+            Err(e) => panic!("Stream error: {:?}", e),
         }
     }
 
-    println!("=============\nresult: \n{}", s);
+    println!("\n===== full answer =====\n{}", answer);
 }
 
 #[tokio::test]

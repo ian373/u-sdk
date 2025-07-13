@@ -2,15 +2,17 @@ mod types;
 pub use types::*;
 
 mod error;
-mod utils;
 pub use error::Error;
 
-use async_stream::stream;
-use bon::{Builder, bon};
+mod utils;
+
+use async_stream::try_stream;
+use bon::bon;
+use bytes::{Buf, BytesMut};
 use common_lib::helper::{into_request_failed_error, parse_json_response};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
-use serde::Serialize;
 use tokio_stream::{Stream, StreamExt};
+use utils::check_msg_list;
 
 const BASE_URL: &str = "https://api.deepseek.com";
 
@@ -54,32 +56,6 @@ impl Client {
 //endregion
 
 //region chat
-#[derive(Builder, Serialize)]
-pub struct Chat<'a> {
-    #[builder(start_fn)]
-    #[serde(skip_serializing)]
-    pub(crate) client: &'a Client,
-    #[builder(field)]
-    stop: Vec<String>,
-    pub(crate) messages: &'a [Message],
-    model: &'a str,
-    frequency_penalty: Option<f32>, // Default 0.0 Possible values: >= -2 and <= 2
-    max_tokens: Option<u32>,        // Default 4096 Possible values: > 1
-    presence_penalty: Option<f32>,  // Default 0.0 Possible values: >= -2 and <= 2
-    response_format: Option<ResponseFormat<'a>>, // Default text
-    #[builder(default = false)]
-    pub(crate) stream: bool,
-    stream_options: Option<StreamOption>,
-    temperature: Option<f32>, // Default 1.0 Possible values: >= 0 and <= 2
-    top_p: Option<f32>,       // Default 1.0 Possible values: <= 1
-    // pub(crate) tools: Option<()>,
-    // #[serde(serialize_with = "serialize_tolls_choices")]
-    // pub(crate) tool_choice: Option<()>,
-    #[builder(default = false)]
-    logprobs: bool,
-    top_logprobs: Option<i32>, // Possible values: >= 0 and <= 20 指定此参数时，logprobs 必须为 true。
-}
-
 impl Chat<'_> {
     /// 多轮对话形式
     ///
@@ -94,7 +70,7 @@ impl Chat<'_> {
     /// {"content": "Hi", "role": "user" }
     /// ```
     pub async fn chat(&self) -> Result<ChatResponse, Error> {
-        utils::check_msg_list(self.messages)?;
+        check_msg_list(self.messages)?;
 
         // 防止 stream 为 true
         if self.stream {
@@ -115,8 +91,10 @@ impl Chat<'_> {
         Ok(res)
     }
 
-    pub async fn chat_by_stream(&self) -> Result<impl Stream<Item = StreamEvent> + use<>, Error> {
-        utils::check_msg_list(self.messages)?;
+    pub async fn chat_by_stream(
+        &self,
+    ) -> Result<impl Stream<Item = Result<StreamEventData, Error>> + use<>, Error> {
+        check_msg_list(&self.messages)?;
 
         if !self.stream {
             return Err(Error::Common(
@@ -124,10 +102,10 @@ impl Chat<'_> {
             ));
         }
 
-        let client = self.client;
-        let resp = client
+        let resp = self
+            .client
             .http_client
-            .post(format!("{}/chat/completions", BASE_URL))
+            .post(&format!("{}/chat/completions", BASE_URL))
             .json(self)
             .send()
             .await?;
@@ -136,43 +114,50 @@ impl Chat<'_> {
             return Err(into_request_failed_error(resp).await.into());
         }
 
-        let mut body = resp.bytes_stream();
-        let mut buffer = String::new();
+        let mut byte_stream = resp.bytes_stream();
 
-        // REFACTOR 需要优化，应该是buf为字节，然后判断b"\n\n"这种
-        let s = stream! {
-            'req_stream: while let Some(chunk) = body.next().await {
-                let chunk = chunk.unwrap();
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
-                while let Some(pos) = buffer.find("\n\n") {
-                    let event_data = &buffer[..pos];
-                    // println!("{}", event_data);
+        let event_stream = try_stream! {
+            let mut buffer = BytesMut::with_capacity(4096);
 
-                    if event_data.starts_with("data: [DONE]") {
-                        yield StreamEvent::Finish;
-                        continue 'req_stream;
+            while let Some(chunk) = byte_stream.next().await {
+                // 如果底层网络错误，会通过 `?` 返回 Err(Error) 并终止流
+                let chunk = chunk?;
+                buffer.extend(chunk);
+
+                // SSE 协议中，每条事件以 "\n\n" 分隔
+                while let Some(pos) = buffer.windows(2).position(|w| w == b"\n\n") {
+                    // 转成 &str，UTF-8 错误同样会返回 Err(Error)
+                    let text = std::str::from_utf8(&buffer[..pos])
+                        .map_err(|e| Error::Common(format!("Invalid UTF-8 sequence: {}", e)))?;
+                    // 解析这一条事件，没有事件时（data: [DONE]）会返回 Ok(None)
+                    if let Some(evt) = parse_event_block(text)? {
+                        yield evt;
                     }
-
-                    if let Some(event) = event_data.strip_prefix("data:") {
-                        let event_data =serde_json::from_str::<StreamEventData>(event);
-                        match event_data {
-                            Ok(data) => {
-                                yield StreamEvent::Data(data);
-                            }
-                            Err(_) => {
-                                yield StreamEvent::Unknown(event.to_string());
-                            }
-                        }
-                    } else {
-                        yield StreamEvent::Unknown(event_data.to_string());
-                    }
-
-                    buffer = buffer[pos + 2..].to_string();
+                    // 清除已处理的部分
+                    buffer.advance(pos + 2);
                 }
             }
         };
 
-        Ok(Box::pin(s))
+        Ok(Box::pin(event_stream))
+    }
+}
+
+// 解析一段完整的 SSE 事件文本
+fn parse_event_block(s: &str) -> Result<Option<StreamEventData>, Error> {
+    let s = s.trim();
+    // 结束标志
+    if s.starts_with("data: [DONE]") {
+        return Ok(None);
+    }
+    // 正常的数据行
+    if let Some(rest) = s.strip_prefix("data:") {
+        let json_str = rest.trim_start();
+        let data: StreamEventData = serde_json::from_str(json_str)
+            .map_err(|e| Error::Common(format!("Failed to parse stream event data: {}", e)))?;
+        Ok(Some(data))
+    } else {
+        Err(Error::Common("Unknown event format".to_string()))
     }
 }
 //endregion
