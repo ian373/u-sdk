@@ -1,5 +1,5 @@
 [workspace]
-members = ["u-sdk", "common-lib"]
+members = ["u-sdk", "u-sdk-common"]
 resolver = "2"
 
 [workspace.dependencies]

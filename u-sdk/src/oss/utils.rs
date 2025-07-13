@@ -2,12 +2,12 @@ use crate::oss::Client;
 use crate::oss::Error;
 use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use base64::{Engine, engine::general_purpose};
-use common_lib::helper::gmt_format;
 use md5::{Digest, Md5};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use tokio::io::AsyncReadExt;
+use u_sdk_common::helper::gmt_format;
 use url::Url;
 
 pub fn get_content_md5(bytes: &[u8]) -> String {

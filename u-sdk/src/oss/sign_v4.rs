@@ -1,10 +1,10 @@
 use super::Client;
-use common_lib::helper::gmt_format;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 use time::OffsetDateTime;
+use u_sdk_common::helper::gmt_format;
 use url::Url;
 // 签名文档：https://help.aliyun.com/zh/oss/developer-reference/recommend-to-use-signature-version-4
 

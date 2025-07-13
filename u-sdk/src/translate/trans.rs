@@ -2,9 +2,9 @@ use super::Client;
 use super::Error;
 use super::types_rs::*;
 use crate::translate::utils::parse_json_response;
-use common_lib::helper::into_header_map;
-use common_lib::open_api_sign::{SignParams, get_common_headers};
 use std::collections::BTreeMap;
+use u_sdk_common::helper::into_header_map;
+use u_sdk_common::open_api_sign::{SignParams, get_common_headers};
 
 impl Client {
     /// 机器翻译-通用版和专业版

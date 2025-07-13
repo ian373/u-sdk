@@ -9,9 +9,9 @@ mod utils;
 use async_stream::try_stream;
 use bon::bon;
 use bytes::{Buf, BytesMut};
-use common_lib::helper::{into_request_failed_error, parse_json_response};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use tokio_stream::{Stream, StreamExt};
+use u_sdk_common::helper::{into_request_failed_error, parse_json_response};
 use utils::check_msg_list;
 
 const BASE_URL: &str = "https://api.deepseek.com";
