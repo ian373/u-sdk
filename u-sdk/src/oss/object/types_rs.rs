@@ -116,11 +116,21 @@ pub struct GetObject<'a> {
     response_content_encoding: Option<&'a str>,
 }
 
-#[derive(Debug)]
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct GetObjectResponseHeader {
+    #[serde(default, skip_deserializing)]
+    pub custom_x_oss_meta: HashMap<String, String>,
     pub x_oss_server_side_encryption: Option<String>,
     pub x_oss_tagging_count: Option<String>,
     pub x_oss_expiration: Option<String>,
+    #[serde_as(as = "DisplayFromStr")]
+    pub content_length: u64,
+    pub accept_ranges: Option<String>,
+    pub content_type: String,
+    pub last_modified: String,
+    pub etag: String,
 }
 // endregion: --- get object
 
@@ -289,6 +299,7 @@ pub struct HeadObject<'a> {
     pub if_none_match: Option<&'a str>,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct HeadObjectResponseHeader {
@@ -313,6 +324,10 @@ pub struct HeadObjectResponseHeader {
     pub access_control_allow_headers: Option<String>,
     pub access_control_expose_headers: Option<String>,
     pub x_oss_tagging_count: Option<String>,
+    pub content_type: String,
+    #[serde_as(as = "DisplayFromStr")]
+    pub content_length: u64,
+    pub etag: String,
 }
 // endregion: --- head object
 

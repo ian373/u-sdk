@@ -8,10 +8,11 @@ use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
     compute_md5_from_file, get_content_md5, get_request_header, into_request_failed_error,
-    parse_xml_response, validate_object_name,
+    parse_get_object_response_header, parse_xml_response, validate_object_name,
 };
 use bytes::Bytes;
 use reqwest::Body;
+use reqwest::header::HeaderMap;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::Path;
@@ -118,11 +119,11 @@ impl GetObject<'_> {
     pub async fn receive_bytes(
         &self,
         object_name: &str,
-    ) -> Result<(Bytes, GetObjectResponseHeader), Error> {
-        let (resp, response_header) = self.get_response(object_name).await?;
+    ) -> Result<(Bytes, GetObjectResponseHeader, HeaderMap), Error> {
+        let (resp, response_header, header) = self.get_response(object_name).await?;
         let data = resp.bytes().await?;
 
-        Ok((data, response_header))
+        Ok((data, response_header, header))
     }
 
     pub async fn receive_bytes_stream(
@@ -132,37 +133,35 @@ impl GetObject<'_> {
         (
             impl Stream<Item = Result<Bytes, Error>> + use<>,
             GetObjectResponseHeader,
+            HeaderMap,
         ),
         Error,
     > {
-        let (resp, response_header) = self.get_response(object_name).await?;
-
+        let (resp, response_header, header) = self.get_response(object_name).await?;
         let byte_stream = resp.bytes_stream().map(|item| item.map_err(Error::Reqwest));
-
-        Ok((byte_stream, response_header))
+        Ok((byte_stream, response_header, header))
     }
 
     pub async fn download_to_file(
         &self,
         object_name: &str,
         file_path: &Path,
-    ) -> Result<GetObjectResponseHeader, Error> {
-        let (mut resp, response_header) = self.get_response(object_name).await?;
+    ) -> Result<(GetObjectResponseHeader, HeaderMap), Error> {
+        let (mut resp, response_header, header) = self.get_response(object_name).await?;
 
         let mut file = tokio::fs::File::create(file_path).await?;
-
         while let Some(chunk) = resp.chunk().await? {
             file.write_all(&chunk).await?;
         }
         file.flush().await?;
 
-        Ok(response_header)
+        Ok((response_header, header))
     }
 
     async fn get_response(
         &self,
         object_name: &str,
-    ) -> Result<(reqwest::Response, GetObjectResponseHeader), Error> {
+    ) -> Result<(reqwest::Response, GetObjectResponseHeader, HeaderMap), Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -173,7 +172,6 @@ impl GetObject<'_> {
         .unwrap();
 
         let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
-
         let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Get);
 
         let resp = client
@@ -188,24 +186,14 @@ impl GetObject<'_> {
             return Err(into_request_failed_error(resp).await);
         }
 
-        let header = resp.headers();
-        let x_oss_server_side_encryption = header
-            .get("x-oss-server-side-encryption")
-            .map(|v| v.to_str().unwrap().to_owned());
-        let x_oss_tagging_count = header
-            .get("x-oss-tagging-count")
-            .map(|v| v.to_str().unwrap().to_owned());
-        let x_oss_expiration = header
-            .get("x-oss-expiration")
-            .map(|v| v.to_str().unwrap().to_owned());
+        let header = resp.headers().clone();
+        let (mut response_header, custom_meta_map) =
+            parse_get_object_response_header::<GetObjectResponseHeader>(&header);
+        if !custom_meta_map.is_empty() {
+            response_header.custom_x_oss_meta = custom_meta_map;
+        }
 
-        let response_header = GetObjectResponseHeader {
-            x_oss_server_side_encryption,
-            x_oss_tagging_count,
-            x_oss_expiration,
-        };
-
-        Ok((resp, response_header))
+        Ok((resp, response_header, header))
     }
 }
 
@@ -354,7 +342,10 @@ impl DeleteMultipleObjects<'_> {
 }
 
 impl HeadObject<'_> {
-    pub async fn send(&self, object_name: &str) -> Result<HeadObjectResponseHeader, Error> {
+    pub async fn send(
+        &self,
+        object_name: &str,
+    ) -> Result<(HeadObjectResponseHeader, HeaderMap), Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -365,7 +356,6 @@ impl HeadObject<'_> {
         .unwrap();
 
         let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
-
         let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Head);
 
         let resp = client
@@ -380,28 +370,13 @@ impl HeadObject<'_> {
             return Err(into_request_failed_error(resp).await);
         }
 
-        let mut map = Map::with_capacity(30);
-        let mut custom_meta_map = HashMap::new();
-        for (name, val) in resp.headers().iter() {
-            let name_s = name.as_str();
-            if let Ok(s) = val.to_str() {
-                if name_s.starts_with("x-oss-meta-") {
-                    custom_meta_map.insert(
-                        name_s.trim_start_matches("x-oss-meta-").to_string(),
-                        s.to_string(),
-                    );
-                } else {
-                    map.insert(name_s.to_string(), Value::String(s.to_string()));
-                }
-            }
-        }
-
-        let mut data: HeadObjectResponseHeader =
-            serde_json::from_value(Value::Object(map)).unwrap();
+        let header = resp.headers().clone();
+        let (mut response_header, custom_meta_map) =
+            parse_get_object_response_header::<HeadObjectResponseHeader>(&header);
         if !custom_meta_map.is_empty() {
-            data.custom_x_oss_meta = custom_meta_map;
+            response_header.custom_x_oss_meta = custom_meta_map;
         }
-        Ok(data)
+        Ok((response_header, header))
     }
 }
 

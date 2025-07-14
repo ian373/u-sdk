@@ -4,6 +4,8 @@ use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
 use base64::{Engine, engine::general_purpose};
 use md5::{Digest, Md5};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use serde::de::DeserializeOwned;
+use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use tokio::io::AsyncReadExt;
@@ -245,4 +247,27 @@ fn partition_header(
         }
     }
     (sign_map, remaining_map)
+}
+
+pub(crate) fn parse_get_object_response_header<T: DeserializeOwned>(
+    header: &HeaderMap,
+) -> (T, HashMap<String, String>) {
+    let mut map = Map::with_capacity(30);
+    let mut custom_meta_map = HashMap::with_capacity(30);
+    for (name, val) in header {
+        let name_s = name.as_str();
+        if let Ok(s) = val.to_str() {
+            if name_s.starts_with("x-oss-meta-") {
+                custom_meta_map.insert(
+                    name_s.trim_start_matches("x-oss-meta-").to_string(),
+                    s.to_string(),
+                );
+            } else {
+                map.insert(name_s.to_string(), Value::String(s.to_string()));
+            }
+        }
+    }
+
+    let response_header = serde_json::from_value::<T>(Value::Object(map)).unwrap();
+    (response_header, custom_meta_map)
 }
