@@ -1,6 +1,4 @@
-//! oss sdk
-//!
-//! 阿里云oss文档：<https://help.aliyun.com/zh/oss/>
+//! 阿里云oss sdk
 //!
 //! 注意：
 //!
