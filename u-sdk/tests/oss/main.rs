@@ -172,8 +172,8 @@ async fn get_object_test() {
         .await;
 
     match res {
-        Ok((data, header)) => {
-            println!("[success] header: {:#?}", header);
+        Ok((data, response_header, _)) => {
+            println!("[success] header: {:#?}", response_header);
             println!("[success] data: {}", String::from_utf8_lossy(&data));
         }
         Err(e) => println!("error: {}", e),
@@ -194,7 +194,7 @@ async fn get_object_by_download_test() {
         .await;
 
     match res {
-        Ok(header) => println!("[success] header: {:#?}", header),
+        Ok((header, _)) => println!("[success] header: {:#?}", header),
         Err(e) => println!("error: {}", e),
     }
 }
@@ -210,8 +210,8 @@ async fn get_object_by_stream_test() {
         .await;
 
     match res {
-        Ok((mut stream, header)) => {
-            println!("[success] header: {:#?}", header);
+        Ok((mut stream, response_header, _)) => {
+            println!("[success] header: {:#?}", response_header);
             let mut buf = String::new();
             while let Some(chunk) = stream.next().await {
                 match chunk {
@@ -307,7 +307,7 @@ async fn head_object_test() {
         .send("test/test_88888.txt")
         .await;
     match res {
-        Ok(header) => println!("[success] header: {:#?}", header),
+        Ok((header, _)) => println!("[success] header: {:#?}", header),
         Err(e) => println!("[error] {}", e),
     }
 }
