@@ -1,3 +1,5 @@
+//! Server酱3 sdk
+
 use bon::{Builder, bon};
 use reqwest::StatusCode;
 use serde::Serialize;

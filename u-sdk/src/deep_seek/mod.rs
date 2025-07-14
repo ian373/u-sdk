@@ -1,3 +1,5 @@
+//! DeepSeek sdk
+
 mod types;
 pub use types::*;
 
