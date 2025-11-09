@@ -22,7 +22,7 @@ pub struct GetIpProtection<'a> {
 }
 
 impl Client {
-    pub fn get_ip_protection(&self) -> GetIpProtectionBuilder {
+    pub fn get_ip_protection(&self) -> GetIpProtectionBuilder<'_> {
         GetIpProtection::builder(self)
     }
 }

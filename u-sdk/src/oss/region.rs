@@ -64,7 +64,7 @@ impl DescribeRegions<'_> {
 }
 
 impl Client {
-    pub fn describe_regions(&self) -> DescribeRegionsBuilder {
+    pub fn describe_regions(&self) -> DescribeRegionsBuilder<'_> {
         DescribeRegions::builder(self)
     }
 }

@@ -382,19 +382,19 @@ impl HeadObject<'_> {
 
 /// Object基础操作
 impl Client {
-    pub fn put_object(&self) -> PutObjectBuilder {
+    pub fn put_object(&self) -> PutObjectBuilder<'_> {
         PutObject::builder(self)
     }
 
-    pub fn get_object(&self) -> GetObjectBuilder {
+    pub fn get_object(&self) -> GetObjectBuilder<'_> {
         GetObject::builder(self)
     }
 
-    pub fn copy_object(&self) -> CopyObjectBuilder {
+    pub fn copy_object(&self) -> CopyObjectBuilder<'_> {
         CopyObject::builder(self)
     }
 
-    pub fn append_object(&self) -> AppendObjectBuilder {
+    pub fn append_object(&self) -> AppendObjectBuilder<'_> {
         AppendObject::builder(self)
     }
 
@@ -444,11 +444,11 @@ impl Client {
         })
     }
 
-    pub fn delete_multiple_objects(&self) -> DeleteMultipleObjectsBuilder {
+    pub fn delete_multiple_objects(&self) -> DeleteMultipleObjectsBuilder<'_> {
         DeleteMultipleObjects::builder(self)
     }
 
-    pub fn head_object(&self) -> HeadObjectBuilder {
+    pub fn head_object(&self) -> HeadObjectBuilder<'_> {
         HeadObject::builder(self)
     }
 
