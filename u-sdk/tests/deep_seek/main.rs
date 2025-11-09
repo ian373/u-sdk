@@ -28,7 +28,7 @@ fn get_key() {
 async fn chat_test() {
     let token = get_deep_seek_key();
     let client = Client::builder().api_key(token).build();
-    let mut msg_list = vec![
+    let msg_list = vec![
         Message {
             content: "You are a helpful assistant.".to_string(),
             role: Role::Assistant,
@@ -40,7 +40,7 @@ async fn chat_test() {
     ];
     let resp = client
         .chat_builder()
-        .messages(&mut msg_list)
+        .messages(&msg_list)
         .model("deepseek-chat")
         .build()
         .chat()

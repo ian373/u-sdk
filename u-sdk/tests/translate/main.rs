@@ -12,9 +12,7 @@ pub struct AliConfig {
 impl AliConfig {
     pub fn get_conf() -> Self {
         let file_str = std::fs::read_to_string("tests/translate/config.toml").unwrap();
-        let conf = toml::from_str(&file_str).unwrap();
-
-        conf
+        toml::from_str(&file_str).unwrap()
     }
 }
 

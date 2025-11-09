@@ -18,9 +18,7 @@ pub struct AliConfig {
 impl AliConfig {
     pub fn get_conf() -> Self {
         let file_str = std::fs::read_to_string("tests/oss/config.toml").unwrap();
-        let conf = toml::from_str(&file_str).unwrap();
-
-        conf
+        toml::from_str(&file_str).unwrap()
     }
 }
 
@@ -248,7 +246,7 @@ async fn copy_object_test() {
         .x_oss_copy_source("/utab-app/custom-image/01919e65-75f0-7590-b8a8-b3f22f705db8")
         .unwrap()
         .build()
-        .send(&client.bucket(), "test/copy_img.jpg")
+        .send(client.bucket(), "test/copy_img.jpg")
         .await;
 
     match resp {

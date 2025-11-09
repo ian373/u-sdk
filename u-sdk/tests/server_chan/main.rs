@@ -12,8 +12,7 @@ pub struct Config {
 impl Config {
     pub fn get_conf() -> Self {
         let file_str = std::fs::read_to_string("tests/server_chan/config.toml").unwrap();
-        let conf = toml::from_str(&file_str).unwrap();
-        conf
+        toml::from_str(&file_str).unwrap()
     }
 }
 
