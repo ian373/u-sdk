@@ -1,0 +1,124 @@
+name: Rust CI (workspace)
+
+permissions:
+    contents: read
+
+on:
+    pull_request:
+        branches: [ main ]
+    push:
+        branches: [ main ]
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+    RUST_BACKTRACE: 1
+    # 在主分支的 lint/test/doc 阶段直接把所有编译/文档警告当成 error
+    RUSTFLAGS: -Dwarnings
+    RUSTDOCFLAGS: -Dwarnings
+
+jobs:
+    # 1. Lint（fmt + clippy），只跑一次 Linux/stable，保证代码质量
+    lint:
+        name: Lint (fmt + clippy, workspace)
+        runs-on: ubuntu-latest
+
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v5
+
+            -   name: Setup Rust (stable + clippy + rustfmt)
+                uses: dtolnay/rust-toolchain@stable
+                with:
+                    components: clippy, rustfmt
+
+            -   name: Cache cargo/target
+                uses: Swatinem/rust-cache@v2
+
+            -   name: Format check
+                run: cargo fmt --all -- --check
+
+            -   name: Clippy (deny warnings, workspace + all features)
+                run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+    # 2. 测试（含所有 feature），跨平台矩阵
+    test:
+        name: Test (workspace, nextest)
+        needs: [ lint ]                 # lint 过了再测，节省一点资源
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+        runs-on: ${{ matrix.os }}
+
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v5
+
+            -   name: Setup Rust (stable)
+                uses: dtolnay/rust-toolchain@stable
+
+            -   name: Cache cargo/target
+                uses: Swatinem/rust-cache@v2
+
+            # 安装 cargo-nextest（现代测试跑器，比 cargo test 更快）
+            -   name: Install cargo-nextest
+                uses: taiki-e/install-action@nextest
+
+            # 确认禁用默认 feature 时也能编译/通过
+            -   name: Test (no default features)
+                run: cargo nextest run --workspace --no-default-features
+
+            # 再跑一遍 all-features，覆盖 u-sdk 的所有可选功能
+            -   name: Test (all features)
+                run: cargo nextest run --workspace --all-features
+
+    # 3. 文档构建，确保 docs.rs 风格的文档可以正常生成
+    doc:
+        name: Doc (workspace, all features)
+        needs: [ lint ]
+        runs-on: ubuntu-latest
+
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v5
+
+            -   name: Setup Rust (stable)
+                uses: dtolnay/rust-toolchain@stable
+
+            -   name: Cache cargo/target
+                uses: Swatinem/rust-cache@v2
+
+            -   name: Build docs (deny warnings)
+                run: cargo doc --workspace --all-features --no-deps --verbose
+
+    # 4. MSRV 检查（只在 push 时跑，避免拖慢每个 PR）
+    msrv:
+        name: MSRV check (minimum supported Rust)
+        if: github.event_name == 'push'
+        runs-on: ubuntu-latest
+        # MSRV 阶段一般不强制 -Dwarnings，防止旧编译器多出新 lint 导致失败
+        env:
+            RUSTFLAGS: ""
+            RUSTDOCFLAGS: ""
+
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v5
+
+            -   name: Setup Rust (MSRV)
+                # 编译项目使用的rust版本，比如在 Cargo.toml 里加上 `rust-version = "1.89.0"`
+                uses: dtolnay/rust-toolchain@master
+                with:
+                    toolchain: 1.89.0
+
+            -   name: Cache cargo/target
+                uses: Swatinem/rust-cache@v2
+
+            -   name: Check builds on MSRV
+                run: cargo check --workspace --all-features

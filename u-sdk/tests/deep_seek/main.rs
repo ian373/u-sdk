@@ -1,3 +1,5 @@
+#![cfg(feature = "deep_seek")]
+
 use serde::Deserialize;
 use tokio_stream::StreamExt;
 use u_sdk::deep_seek::Client;
@@ -15,12 +17,14 @@ fn get_deep_seek_key() -> String {
 }
 
 #[test]
+#[ignore]
 fn get_key() {
     let token = get_deep_seek_key();
     println!("{}", token);
 }
 
 #[tokio::test]
+#[ignore]
 async fn chat_test() {
     let token = get_deep_seek_key();
     let client = Client::builder().api_key(token).build();
@@ -49,6 +53,7 @@ async fn chat_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn chat_by_stream_test() {
     let token = get_deep_seek_key();
     let client = Client::builder().api_key(token).build();
@@ -92,6 +97,7 @@ async fn chat_by_stream_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn check_balance_test() {
     let token = get_deep_seek_key();
     let client = Client::builder().api_key(token).build();

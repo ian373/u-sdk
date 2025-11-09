@@ -6,6 +6,7 @@ description = "Some useful SDKs"
 keywords = ["aliyun", "oss", "serverchan", "deepseek"]
 license = "MIT"
 repository = "https://github.com/ian373/u-sdk"
+rust-version = "1.89.0"
 
 [package.metadata.docs.rs]
 all-features = true

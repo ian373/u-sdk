@@ -1,3 +1,5 @@
+#![cfg(feature = "server_chan")]
+
 use serde::Deserialize;
 use u_sdk::server_chan::*;
 
@@ -16,6 +18,7 @@ impl Config {
 }
 
 #[tokio::test]
+#[ignore]
 async fn server_chan_test() {
     let conf = Config::get_conf();
     let client = Client::builder().uid(conf.uid).key(&conf.key).build();

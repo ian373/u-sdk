@@ -1,3 +1,5 @@
+#![cfg(feature = "email")]
+
 use serde::Deserialize;
 use u_sdk::email;
 
@@ -20,12 +22,14 @@ impl AliConfig {
 
 // 获取本地配置信息测试
 #[test]
+#[ignore]
 fn get_test_conf() {
     let s = AliConfig::get_conf();
     println!("{:?}", s);
 }
 
 #[tokio::test]
+#[ignore]
 async fn single_send_email() {
     let conf = AliConfig::get_conf();
     let client = email::Client::builder()
@@ -51,6 +55,7 @@ async fn single_send_email() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn desc_account_summary_test() {
     let conf = AliConfig::get_conf();
     let client = email::Client::builder()
@@ -65,6 +70,7 @@ async fn desc_account_summary_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn query_domain_by_param_test() {
     let conf = AliConfig::get_conf();
     let client = email::Client::builder()
@@ -79,6 +85,7 @@ async fn query_domain_by_param_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_ip_protection_test() {
     let conf = AliConfig::get_conf();
     let client = email::Client::builder()

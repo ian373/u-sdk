@@ -1,3 +1,5 @@
+#![cfg(feature = "oss")]
+
 use oss::object::{ObjectToDelete, OssMetaExt, PutObjectBody};
 use serde::Deserialize;
 use std::path::Path;
@@ -34,6 +36,7 @@ fn get_oss_client() -> oss::Client {
 }
 
 #[tokio::test]
+#[ignore]
 async fn list_buckets_test() {
     let client = get_oss_client();
     let res = client.list_buckets().build().send().await;
@@ -44,6 +47,7 @@ async fn list_buckets_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn describe_regions_test() {
     let client = get_oss_client();
     let res = client
@@ -59,6 +63,7 @@ async fn describe_regions_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn put_bucket_test() {
     let client = get_oss_client();
     let res = client
@@ -75,6 +80,7 @@ async fn put_bucket_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn list_objects_v2_test() {
     let client = get_oss_client();
     let res = client
@@ -90,6 +96,7 @@ async fn list_objects_v2_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_bucket_info_test() {
     let client = get_oss_client();
     let res = client
@@ -106,6 +113,7 @@ async fn get_bucket_info_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_bucket_location_test() {
     let client = get_oss_client();
     let res = client
@@ -122,6 +130,7 @@ async fn get_bucket_location_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_bucket_stat_test() {
     let client = get_oss_client();
 
@@ -139,6 +148,7 @@ async fn get_bucket_stat_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn put_object_test() {
     let client = get_oss_client();
 
@@ -162,6 +172,7 @@ async fn put_object_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_object_test() {
     let client = get_oss_client();
 
@@ -181,6 +192,7 @@ async fn get_object_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_object_by_download_test() {
     let client = get_oss_client();
 
@@ -200,6 +212,7 @@ async fn get_object_by_download_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_object_by_stream_test() {
     let client = get_oss_client();
 
@@ -226,6 +239,7 @@ async fn get_object_by_stream_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn copy_object_test() {
     let client = get_oss_client();
 
@@ -244,6 +258,7 @@ async fn copy_object_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn append_object_test() {
     let client = get_oss_client();
 
@@ -262,6 +277,7 @@ async fn append_object_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn delete_object_test() {
     let client = get_oss_client();
     let res = client.delete_object("test/IMG_20240726_155048.jpg").await;
@@ -272,6 +288,7 @@ async fn delete_object_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn delete_multiple_objects_test() {
     let client = get_oss_client();
     let objs = vec![
@@ -299,6 +316,7 @@ async fn delete_multiple_objects_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn head_object_test() {
     let client = get_oss_client();
     let res = client
@@ -313,6 +331,7 @@ async fn head_object_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_object_meta_test() {
     let client = get_oss_client();
     let res = client.get_object_meta("test/test_88888.txt").await;

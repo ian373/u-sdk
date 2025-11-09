@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/ian373/u-sdk"
 description = "utils for u-sdk"
+rust-version = "1.89.0"
 
 [dependencies]
 hmac = { workspace = true }
