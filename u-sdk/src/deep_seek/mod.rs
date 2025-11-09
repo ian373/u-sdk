@@ -40,7 +40,7 @@ impl Client {
         Self { http_client }
     }
 
-    pub fn chat_builder(&self) -> ChatBuilder {
+    pub fn chat_builder(&self) -> ChatBuilder<'_> {
         Chat::builder(self)
     }
 

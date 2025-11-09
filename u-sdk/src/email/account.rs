@@ -31,7 +31,7 @@ pub struct DescAccountSummary<'a> {
 }
 
 impl Client {
-    pub fn desc_account_summary(&self) -> DescAccountSummaryBuilder {
+    pub fn desc_account_summary(&self) -> DescAccountSummaryBuilder<'_> {
         DescAccountSummary::builder(self)
     }
 }

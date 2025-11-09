@@ -15,9 +15,11 @@ pub struct Chat<'a> {
     frequency_penalty: Option<f32>, // Default 0.0 Possible values: >= -2 and <= 2
     max_tokens: Option<u32>,        // Default 4096 Possible values: > 1
     presence_penalty: Option<f32>,  // Default 0.0 Possible values: >= -2 and <= 2
+    #[builder(skip)]
     response_format: Option<ResponseFormat<'a>>, // Default text
     #[builder(default = false)]
     pub(crate) stream: bool,
+    #[builder(skip)]
     stream_options: Option<StreamOption>,
     temperature: Option<f32>, // Default 1.0 Possible values: >= 0 and <= 2
     top_p: Option<f32>,       // Default 1.0 Possible values: <= 1

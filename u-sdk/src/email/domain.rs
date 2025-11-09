@@ -59,7 +59,7 @@ pub struct QueryDomainByParam<'a> {
 }
 
 impl Client {
-    pub fn query_domain_by_param(&self) -> QueryDomainByParamBuilder {
+    pub fn query_domain_by_param(&self) -> QueryDomainByParamBuilder<'_> {
         QueryDomainByParam::builder(self)
     }
 }

@@ -45,7 +45,7 @@ pub struct SingleSendEmail<'a> {
 }
 
 impl Client {
-    pub fn single_send_email(&self) -> SingleSendEmailBuilder {
+    pub fn single_send_email(&self) -> SingleSendEmailBuilder<'_> {
         SingleSendEmail::builder(self)
     }
 }
