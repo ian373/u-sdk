@@ -1,3 +1,5 @@
+#![cfg(feature = "server_chan")]
+
 use serde::Deserialize;
 use u_sdk::server_chan::*;
 
@@ -10,12 +12,12 @@ pub struct Config {
 impl Config {
     pub fn get_conf() -> Self {
         let file_str = std::fs::read_to_string("tests/server_chan/config.toml").unwrap();
-        let conf = toml::from_str(&file_str).unwrap();
-        conf
+        toml::from_str(&file_str).unwrap()
     }
 }
 
 #[tokio::test]
+#[ignore]
 async fn server_chan_test() {
     let conf = Config::get_conf();
     let client = Client::builder().uid(conf.uid).key(&conf.key).build();

@@ -1,3 +1,5 @@
+#![cfg(feature = "translate")]
+
 use serde::Deserialize;
 use u_sdk::translate::*;
 
@@ -10,9 +12,7 @@ pub struct AliConfig {
 impl AliConfig {
     pub fn get_conf() -> Self {
         let file_str = std::fs::read_to_string("tests/translate/config.toml").unwrap();
-        let conf = toml::from_str(&file_str).unwrap();
-
-        conf
+        toml::from_str(&file_str).unwrap()
     }
 }
 
@@ -26,6 +26,7 @@ fn get_trans_client() -> Client {
 }
 
 #[tokio::test]
+#[ignore]
 async fn translate_test() {
     let client = get_trans_client();
     let res = client
@@ -46,6 +47,7 @@ async fn translate_test() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn get_detect_language_test() {
     let client = get_trans_client();
     let res = client

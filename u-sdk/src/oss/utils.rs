@@ -88,7 +88,7 @@ pub(crate) async fn compute_md5_from_file(path: &Path) -> Result<String, Error> 
 
 pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
     // 1. 长度检查
-    let len = name.as_bytes().len();
+    let len = name.len();
     if len == 0 {
         return Err(Error::Common("object_name cannot be empty".to_owned()));
     }
@@ -99,12 +99,12 @@ pub(crate) fn validate_object_name(name: &str) -> Result<(), Error> {
     }
 
     // 2. 前缀检查
-    if let Some(first) = name.chars().next() {
-        if first == '/' || first == '\\' {
-            return Err(Error::Common(
-                "object_name cannot start with '/' or '\\'".to_owned(),
-            ));
-        }
+    if let Some(first) = name.chars().next()
+        && (first == '/' || first == '\\')
+    {
+        return Err(Error::Common(
+            "object_name cannot start with '/' or '\\'".to_owned(),
+        ));
     }
 
     // 3. 控制字符检查
