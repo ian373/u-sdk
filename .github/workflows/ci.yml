@@ -72,7 +72,8 @@ jobs:
 
             # 确认禁用默认 feature 时也能编译/通过
             -   name: Test (no default features)
-                run: cargo nextest run --workspace --no-default-features
+                # 如果没有任何测试会返回error，添加一个--no-tests=warn来调整一下行为
+                run: cargo nextest run --workspace --no-default-features --no-tests=warn
 
             # 再跑一遍 all-features，覆盖 u-sdk 的所有可选功能
             -   name: Test (all features)
