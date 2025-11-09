@@ -45,7 +45,7 @@ impl Client {
         map.insert("SignatureVersion".to_owned(), "1.0".to_owned());
 
         if let Some(r) = region_id {
-            map.insert("RegionId".to_owned(), r.into());
+            map.insert("RegionId".to_owned(), r);
         }
 
         Self {

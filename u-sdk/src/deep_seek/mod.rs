@@ -96,7 +96,7 @@ impl Chat<'_> {
     pub async fn chat_by_stream(
         &self,
     ) -> Result<impl Stream<Item = Result<StreamEventData, Error>> + use<>, Error> {
-        check_msg_list(&self.messages)?;
+        check_msg_list(self.messages)?;
 
         if !self.stream {
             return Err(Error::Common(
@@ -107,7 +107,7 @@ impl Chat<'_> {
         let resp = self
             .client
             .http_client
-            .post(&format!("{}/chat/completions", BASE_URL))
+            .post(format!("{}/chat/completions", BASE_URL))
             .json(self)
             .send()
             .await?;

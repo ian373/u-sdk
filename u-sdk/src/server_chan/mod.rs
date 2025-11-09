@@ -50,7 +50,7 @@ impl<'a, S: send_msg_builder::State> SendMsgBuilder<'a, S> {
     }
 
     pub fn tags(mut self, tags: impl IntoIterator<Item = &'a str>) -> Self {
-        self.tags.extend(tags.into_iter());
+        self.tags.extend(tags);
         self
     }
 }
