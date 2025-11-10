@@ -6,6 +6,7 @@ permissions:
 on:
     pull_request:
         branches: [ main ]
+        types: [ opened, synchronize, reopened, ready_for_review ]
     push:
         branches: [ main ]
     workflow_dispatch:
@@ -25,6 +26,7 @@ jobs:
     # 1. Lint（fmt + clippy），只跑一次 Linux/stable，保证代码质量
     lint:
         name: Lint (fmt + clippy, workspace)
+        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
         runs-on: ubuntu-latest
 
         steps:
@@ -49,6 +51,7 @@ jobs:
     test:
         name: Test (workspace, nextest)
         needs: [ lint ]                 # lint 过了再测，节省一点资源
+        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
         strategy:
             fail-fast: false
             matrix:
@@ -83,6 +86,7 @@ jobs:
     doc:
         name: Doc (workspace, all features)
         needs: [ lint ]
+        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
         runs-on: ubuntu-latest
 
         steps:
