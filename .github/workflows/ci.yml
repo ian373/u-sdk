@@ -18,6 +18,9 @@ concurrency:
 env:
     CARGO_TERM_COLOR: always
     RUST_BACKTRACE: 1
+    # CI 优化：禁用增量编译，减少 test profile 的调试信息，减小缓存体积/加快构建
+    CARGO_INCREMENTAL: 0
+    CARGO_PROFILE_TEST_DEBUG: 0
     # 在主分支的 lint/test/doc 阶段直接把所有编译/文档警告当成 error
     RUSTFLAGS: -Dwarnings
     RUSTDOCFLAGS: -Dwarnings
@@ -33,6 +36,7 @@ jobs:
             -   name: Checkout
                 uses: actions/checkout@v5
 
+            # 推荐组合：先装好 toolchain，再用 rust-cache 智能缓存
             -   name: Setup Rust (stable + clippy + rustfmt)
                 uses: dtolnay/rust-toolchain@stable
                 with:
@@ -101,6 +105,10 @@ jobs:
 
             -   name: Build docs (deny warnings)
                 run: cargo doc --workspace --all-features --no-deps --verbose
+
+            # nextest 目前不支持 doctest，需要单独跑一遍 cargo test --doc
+            -   name: Doc tests
+                run: cargo test --doc --workspace --all-features
 
     # 4. MSRV 检查（只在 push 时跑，避免拖慢每个 PR）
     msrv:
