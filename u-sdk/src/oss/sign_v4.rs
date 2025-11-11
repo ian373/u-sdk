@@ -170,8 +170,8 @@ impl Client {
     }
 
     pub(crate) fn generate_v4_signature(&self, sign_v4param: SignV4Param) -> String {
-        let date_str = get_date_str(&sign_v4param.date_time);
-        let data_time_str = get_date_time_str(&sign_v4param.date_time);
+        let date_str = get_date_str(sign_v4param.date_time);
+        let data_time_str = get_date_time_str(sign_v4param.date_time);
         let date_key = sign_hmac_sha256_byte(
             format!("aliyun_v4{}", self.access_key_secret).as_bytes(),
             date_str.as_bytes(),
