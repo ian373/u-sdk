@@ -45,7 +45,6 @@ pub enum Role {
 
 #[derive(Serialize, Debug)]
 pub struct ResponseFormat<'a> {
-    #[serde(rename = "type")]
     pub r#type: &'a str,
 }
 
