@@ -159,6 +159,15 @@ impl GetObject<'_> {
         Ok((response_header, header))
     }
 
+    /// 生成预签名URL
+    ///
+    /// - `expires`：URL过期时间，单位秒
+    ///
+    /// 使用长期访问密钥AccessKey生成签名URL，该字段取值要求：最小值为 1 秒，最大值为 604800秒（ 7 天）。
+    ///
+    /// 使用STS临时访问凭证生成签名URL，该字段取值要求：最小值为 1 秒，最大有效时长为 43200秒（ 12 小时）。
+    ///
+    /// [签名文档和说明](https://help.aliyun.com/zh/oss/developer-reference/add-signatures-to-urls)
     pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
