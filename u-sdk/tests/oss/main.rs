@@ -236,6 +236,18 @@ async fn get_object_by_stream_test() {
     }
 }
 
+#[test]
+#[ignore]
+fn get_object_presigned_url_test() {
+    let client = get_oss_client();
+    let res = client
+        .get_object()
+        .range("bytes=0-99")
+        .build()
+        .generate_presigned_url("custom-image/01919e65-75f0-7590-b8a8-b3f22f705db8", 300);
+    println!("res: {:#?}", res);
+}
+
 #[tokio::test]
 #[ignore]
 async fn copy_object_test() {

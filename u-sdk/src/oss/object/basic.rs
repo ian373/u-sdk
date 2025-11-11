@@ -7,8 +7,9 @@ use crate::oss::Client;
 use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
-    compute_md5_from_file, get_content_md5, get_request_header, into_request_failed_error,
-    parse_get_object_response_header, parse_xml_response, validate_object_name,
+    compute_md5_from_file, generate_presigned_url, get_content_md5, get_request_header,
+    into_request_failed_error, parse_get_object_response_header, parse_xml_response,
+    validate_object_name,
 };
 use bytes::Bytes;
 use reqwest::Body;
@@ -156,6 +157,31 @@ impl GetObject<'_> {
         file.flush().await?;
 
         Ok((response_header, header))
+    }
+
+    /// 生成预签名URL
+    ///
+    /// - `expires`：URL过期时间，单位秒
+    ///
+    /// 使用长期访问密钥AccessKey生成签名URL，该字段取值要求：最小值为 1 秒，最大值为 604800秒（ 7 天）。
+    ///
+    /// 使用STS临时访问凭证生成签名URL，该字段取值要求：最小值为 1 秒，最大有效时长为 43200秒（ 12 小时）。
+    ///
+    /// [签名文档和说明](https://help.aliyun.com/zh/oss/developer-reference/add-signatures-to-urls)
+    pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
+        validate_object_name(object_name)?;
+
+        let client = self.client;
+        let base_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            client.bucket, client.endpoint, object_name
+        ))
+        .unwrap();
+        let header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let signed_url =
+            generate_presigned_url(client, header_map, base_url, HTTPVerb::Get, expires);
+        Ok(signed_url)
     }
 
     async fn get_response(

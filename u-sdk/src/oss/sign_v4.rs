@@ -1,4 +1,5 @@
 use super::Client;
+use crate::oss::utils::{get_date_str, get_date_time_str};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -166,5 +167,52 @@ impl Client {
             "OSS4-HMAC-SHA256 Credential={}/{}/{}/oss/aliyun_v4_request, AdditionalHeaders=host, Signature={}",
             self.access_key_id, date, sign_v4param.signing_region, signature
         )
+    }
+
+    pub(crate) fn generate_v4_signature(&self, sign_v4param: SignV4Param) -> String {
+        let date_str = get_date_str(sign_v4param.date_time);
+        let data_time_str = get_date_time_str(sign_v4param.date_time);
+        let date_key = sign_hmac_sha256_byte(
+            format!("aliyun_v4{}", self.access_key_secret).as_bytes(),
+            date_str.as_bytes(),
+        );
+        let date_region_key =
+            sign_hmac_sha256_byte(&date_key, sign_v4param.signing_region.as_bytes());
+        let date_region_service_key = sign_hmac_sha256_byte(&date_region_key, b"oss");
+        let signing_key = sign_hmac_sha256_byte(&date_region_service_key, b"aliyun_v4_request");
+
+        //region 构建string_to_sign
+        let scope = format!(
+            "{}/{}/{}",
+            date_str, sign_v4param.signing_region, "oss/aliyun_v4_request"
+        );
+        let canonical_request_str = get_canonical_request(
+            sign_v4param.http_verb,
+            sign_v4param.uri,
+            sign_v4param.bucket,
+            sign_v4param.header_map,
+            sign_v4param.additional_header,
+        );
+        // println!(
+        //     "canonical_request_str:====\n{}\n====",
+        //     canonical_request_str
+        // );
+        let mut hasher = Sha256::new();
+        hasher.update(canonical_request_str.as_bytes());
+        let hex_canonical_request = hex::encode(hasher.finalize());
+        let string_to_sign = format!(
+            "OSS4-HMAC-SHA256\n{}\n{}\n{}",
+            data_time_str, scope, hex_canonical_request
+        );
+        // println!(
+        //     "string_to_sign:===========\n{}\n===========",
+        //     string_to_sign
+        // );
+        //endregion
+
+        hex::encode(sign_hmac_sha256_byte(
+            &signing_key,
+            string_to_sign.as_bytes(),
+        ))
     }
 }

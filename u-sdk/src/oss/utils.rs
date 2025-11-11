@@ -232,6 +232,82 @@ pub(crate) fn get_request_header(
     )
 }
 
+pub(crate) fn get_date_str(data: &time::OffsetDateTime) -> String {
+    let date_format = time::format_description::parse("[year][month][day]").unwrap();
+    data.format(&date_format).unwrap()
+}
+
+pub(crate) fn get_date_time_str(data: &time::OffsetDateTime) -> String {
+    let data_time_format =
+        time::format_description::parse("[year][month][day]T[hour][minute][second]Z").unwrap();
+    data.format(&data_time_format).unwrap()
+}
+
+pub(crate) fn generate_presigned_url(
+    client: &Client,
+    header_map: HashMap<String, String>,
+    mut presigned_url: Url,
+    http_verb: HTTPVerb,
+    url_expires: i32,
+) -> String {
+    let mut canonical_header = BTreeMap::new();
+    let host = presigned_url.host_str().unwrap().to_owned();
+    canonical_header.insert("host", host.as_str());
+
+    let mut additional_header = BTreeSet::new();
+    additional_header.insert("host");
+
+    for (k, v) in &header_map {
+        canonical_header.insert(k, v);
+        additional_header.insert(k.as_str());
+    }
+
+    let now = time::OffsetDateTime::now_utc();
+    // 添加参与签名计算的query
+    presigned_url
+        .query_pairs_mut()
+        .append_pair("x-oss-signature-version", "OSS4-HMAC-SHA256")
+        .append_pair(
+            "x-oss-credential",
+            &format!(
+                "{}/{}/{}/oss/aliyun_v4_request",
+                client.access_key_id,
+                &get_date_str(&now),
+                client.region
+            ),
+        )
+        .append_pair("x-oss-date", &get_date_time_str(&now))
+        .append_pair("x-oss-expires", &url_expires.to_string())
+        .append_pair(
+            "x-oss-additional-headers",
+            additional_header
+                .iter()
+                .cloned()
+                .collect::<Vec<&str>>()
+                .join(";")
+                .as_str(),
+        )
+        .finish();
+
+    let sign_v4_param = SignV4Param {
+        signing_region: &client.region,
+        http_verb,
+        uri: &presigned_url,
+        bucket: Some(&client.bucket),
+        header_map: &canonical_header,
+        additional_header: Some(&additional_header),
+        date_time: &now,
+    };
+    let signature = client.generate_v4_signature(sign_v4_param);
+    // 补上不参与签名计算的query
+    presigned_url
+        .query_pairs_mut()
+        .append_pair("x-oss-signature", &signature)
+        .finish();
+
+    presigned_url.to_string()
+}
+
 // 将Header分为需要参与签名的Header和剩余Header
 fn partition_header(
     header_map: HashMap<String, String>,
