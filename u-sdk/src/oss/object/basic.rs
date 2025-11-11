@@ -7,8 +7,9 @@ use crate::oss::Client;
 use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
-    compute_md5_from_file, get_content_md5, get_request_header, into_request_failed_error,
-    parse_get_object_response_header, parse_xml_response, validate_object_name,
+    compute_md5_from_file, generate_presigned_url, get_content_md5, get_request_header,
+    into_request_failed_error, parse_get_object_response_header, parse_xml_response,
+    validate_object_name,
 };
 use bytes::Bytes;
 use reqwest::Body;
@@ -156,6 +157,22 @@ impl GetObject<'_> {
         file.flush().await?;
 
         Ok((response_header, header))
+    }
+
+    pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
+        validate_object_name(object_name)?;
+
+        let client = self.client;
+        let base_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            client.bucket, client.endpoint, object_name
+        ))
+        .unwrap();
+        let header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let signed_url =
+            generate_presigned_url(client, header_map, base_url, HTTPVerb::Get, expires);
+        Ok(signed_url)
     }
 
     async fn get_response(
