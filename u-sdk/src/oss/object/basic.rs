@@ -111,6 +111,33 @@ impl<'a> PutObject<'a> {
             x_oss_version_id,
         })
     }
+
+    /// [OSS不直接提供限制上传文件类型和大小的功能](https://help.aliyun.com/zh/oss/how-do-i-limit-object-formats-and-sizes-when-i-upload-objects-to-oss)
+    ///
+    /// - 生成上传的预签名URL
+    pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
+        validate_object_name(object_name)?;
+
+        let client = self.client;
+        let base_url = url::Url::parse(&format!(
+            "https://{}.{}/{}",
+            client.bucket, client.endpoint, object_name
+        ))
+        .unwrap();
+        let mut header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        if !self.custom_metas.is_empty() {
+            let custom_meta_map = self
+                .custom_metas
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<HashMap<_, _>>();
+            header_map.extend(custom_meta_map);
+        };
+        let signed_url =
+            generate_presigned_url(client, header_map, base_url, HTTPVerb::Put, expires);
+        Ok(signed_url)
+    }
 }
 
 impl GetObject<'_> {

@@ -250,15 +250,17 @@ pub(crate) fn generate_presigned_url(
     http_verb: HTTPVerb,
     url_expires: i32,
 ) -> String {
+    let (header_map, remaining_map) = partition_header(header_map);
     let mut canonical_header = BTreeMap::new();
+    canonical_header.extend(header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     let host = presigned_url.host_str().unwrap().to_owned();
     canonical_header.insert("host", host.as_str());
 
     let mut additional_header = BTreeSet::new();
     additional_header.insert("host");
 
-    for (k, v) in &header_map {
-        canonical_header.insert(k, v);
+    for (k, v) in &remaining_map {
+        canonical_header.insert(k.as_str(), v.as_str());
         additional_header.insert(k.as_str());
     }
 

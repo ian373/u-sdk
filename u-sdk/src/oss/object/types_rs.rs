@@ -19,7 +19,7 @@ pub struct PutObject<'a> {
     #[builder(start_fn)]
     #[serde(skip_serializing)]
     pub(crate) client: &'a Client,
-    // x-meta-* Header，不序列化，需要的时候取出来自己整理
+    // x-meta-* Header，不序列化，收集到map中以供访问
     #[builder(field)]
     #[serde(skip_serializing)]
     pub(crate) custom_metas: HashMap<String, String>,

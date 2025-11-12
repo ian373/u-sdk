@@ -169,6 +169,21 @@ async fn put_object_test() {
     }
 }
 
+#[test]
+#[ignore]
+fn put_object_presigned_url_test() {
+    let client = get_oss_client();
+    let res = client
+        .put_object()
+        .content_type("text/plain")
+        .cache_control("max-age=6666")
+        .x_meta("key", "value")
+        .x_metas([("key3", "value3"), ("key4", "value4")])
+        .build()
+        .generate_presigned_url("test/k-sample.toml", 300);
+    println!("res: {:#?}", res);
+}
+
 #[tokio::test]
 #[ignore]
 async fn get_object_by_bytes_test() {
