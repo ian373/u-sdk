@@ -1,6 +1,6 @@
 [package]
 name = "u-sdk"
-version = "0.3.0"
+version = "0.4.0-alpha.1"
 edition = "2024"
 description = "Some useful SDKs"
 keywords = ["aliyun", "oss", "serverchan", "deepseek"]
@@ -21,7 +21,7 @@ server_chan = []
 deep_seek = ["reqwest/stream", "dep:async-stream", "dep:tokio-stream", "dep:bytes"]
 
 [dependencies]
-u-sdk-common = { path = "../u-sdk-common", version = "0.1.0" }
+u-sdk-common = { path = "../u-sdk-common", version = "0.1.1-alpha.1" }
 # 签名相关
 url = { workspace = true }
 percent-encoding = { workspace = true }
