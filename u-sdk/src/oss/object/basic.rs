@@ -172,13 +172,19 @@ impl GetObject<'_> {
         validate_object_name(object_name)?;
 
         let client = self.client;
-        let base_url = url::Url::parse(&format!(
+        let mut base_url = url::Url::parse(&format!(
             "https://{}.{}/{}",
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
+        let query_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self.queries_part()).unwrap()).unwrap();
+        for (k, v) in query_map.iter() {
+            base_url.query_pairs_mut().append_pair(k, v);
+        }
+
         let header_map: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+            serde_json::from_value(serde_json::to_value(self.headers_part()).unwrap()).unwrap();
         let signed_url =
             generate_presigned_url(client, header_map, base_url, HTTPVerb::Get, expires);
         Ok(signed_url)
@@ -191,13 +197,19 @@ impl GetObject<'_> {
         validate_object_name(object_name)?;
 
         let client = self.client;
-        let request_url = url::Url::parse(&format!(
+        let mut request_url = url::Url::parse(&format!(
             "https://{}.{}/{}",
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
+        let query_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self.queries_part()).unwrap()).unwrap();
+        for (k, v) in query_map.iter() {
+            request_url.query_pairs_mut().append_pair(k, v);
+        }
 
-        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let req_header_map =
+            serde_json::from_value(serde_json::to_value(self.headers_part()).unwrap()).unwrap();
         let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Get);
 
         let resp = client

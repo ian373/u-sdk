@@ -92,28 +92,83 @@ pub struct PutObjectResponseHeader {
 // endregion: --- pub object
 
 // region:    --- get object
+/* 想做成嵌套的builder的，即类似于：
+    GetObject::builder()
+    .header_range("bytes=0-9")
+    .header_if_modified_since("...")
+    .query_response_content_language("en-US")
+    .build();
+    然后会自动收集到：
+    GetObject {
+        header: GetObjectHeaders { ... },
+        query: GetObjectQueryParams { ... },
+    }
+    但bon不支持嵌套builder，所以只能把请求头和请求参数都放在同一个builder里，然后手动区分
+*/
+
 #[serde_with::skip_serializing_none]
-#[derive(Builder, Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
+pub(crate) struct GetObjectHeaders<'a> {
+    pub(crate) range: Option<&'a str>,
+    pub(crate) if_modified_since: Option<&'a str>,
+    pub(crate) if_unmodified_since: Option<&'a str>,
+    pub(crate) if_match: Option<&'a str>,
+    pub(crate) if_none_match: Option<&'a str>,
+    pub(crate) accept_encoding: Option<&'a str>,
+}
+#[serde_with::skip_serializing_none]
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct GetObjectQueries<'a> {
+    pub(crate) response_content_language: Option<&'a str>,
+    pub(crate) response_expires: Option<&'a str>,
+    pub(crate) response_cache_control: Option<&'a str>,
+    pub(crate) response_content_disposition: Option<&'a str>,
+    pub(crate) response_content_encoding: Option<&'a str>,
+}
+#[derive(Builder)]
 pub struct GetObject<'a> {
     #[builder(start_fn)]
-    #[serde(skip_serializing)]
     pub(crate) client: &'a Client,
 
     // 请求头
-    range: Option<&'a str>,
-    if_modified_since: Option<&'a str>,
-    if_unmodified_since: Option<&'a str>,
-    if_match: Option<&'a str>,
-    if_none_match: Option<&'a str>,
-    accept_encoding: Option<&'a str>,
+    pub(crate) range: Option<&'a str>,
+    pub(crate) if_modified_since: Option<&'a str>,
+    pub(crate) if_unmodified_since: Option<&'a str>,
+    pub(crate) if_match: Option<&'a str>,
+    pub(crate) if_none_match: Option<&'a str>,
+    pub(crate) accept_encoding: Option<&'a str>,
 
     // 请求参数
-    response_content_language: Option<&'a str>,
-    response_expires: Option<&'a str>,
-    response_cache_control: Option<&'a str>,
-    response_content_disposition: Option<&'a str>,
-    response_content_encoding: Option<&'a str>,
+    pub(crate) response_content_language: Option<&'a str>,
+    pub(crate) response_expires: Option<&'a str>,
+    pub(crate) response_cache_control: Option<&'a str>,
+    pub(crate) response_content_disposition: Option<&'a str>,
+    pub(crate) response_content_encoding: Option<&'a str>,
+}
+
+impl GetObject<'_> {
+    pub(crate) fn headers_part(&self) -> GetObjectHeaders<'_> {
+        GetObjectHeaders {
+            range: self.range,
+            if_modified_since: self.if_modified_since,
+            if_unmodified_since: self.if_unmodified_since,
+            if_match: self.if_match,
+            if_none_match: self.if_none_match,
+            accept_encoding: self.accept_encoding,
+        }
+    }
+
+    pub(crate) fn queries_part(&self) -> GetObjectQueries<'_> {
+        GetObjectQueries {
+            response_content_language: self.response_content_language,
+            response_expires: self.response_expires,
+            response_cache_control: self.response_cache_control,
+            response_content_disposition: self.response_content_disposition,
+            response_content_encoding: self.response_content_encoding,
+        }
+    }
 }
 
 #[serde_as]
