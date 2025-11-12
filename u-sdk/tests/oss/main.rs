@@ -171,11 +171,13 @@ async fn put_object_test() {
 
 #[tokio::test]
 #[ignore]
-async fn get_object_test() {
+async fn get_object_by_bytes_test() {
     let client = get_oss_client();
 
     let res = client
         .get_object()
+        .range("bytes=0-99")
+        .response_content_language("en-US")
         .build()
         .receive_bytes("test/t-sample.toml")
         .await;
@@ -243,8 +245,9 @@ fn get_object_presigned_url_test() {
     let res = client
         .get_object()
         .range("bytes=0-99")
+        .response_content_language("en-US")
         .build()
-        .generate_presigned_url("custom-image/01919e65-75f0-7590-b8a8-b3f22f705db8", 300);
+        .generate_presigned_url("test/t-sample.toml", 300);
     println!("res: {:#?}", res);
 }
 
