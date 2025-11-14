@@ -8,9 +8,25 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use time::macros::format_description;
 use tokio::io::AsyncReadExt;
 use u_sdk_common::helper::gmt_format;
 use url::Url;
+
+pub fn utc_date_str(date_time: &time::OffsetDateTime) -> String {
+    date_time
+        .to_utc()
+        .format(format_description!("[year][month][day]"))
+        .unwrap()
+}
+pub fn utc_date_time_str(date_time: &time::OffsetDateTime) -> String {
+    date_time
+        .to_utc()
+        .format(format_description!(
+            "[year][month][day]T[hour][minute][second]Z"
+        ))
+        .unwrap()
+}
 
 pub fn get_content_md5(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};

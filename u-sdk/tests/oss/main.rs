@@ -3,6 +3,8 @@
 use oss::object::{ObjectToDelete, OssMetaExt, PutObjectBody};
 use serde::Deserialize;
 use std::path::Path;
+use std::time::Duration;
+use time::OffsetDateTime;
 use tokio_stream::StreamExt;
 use u_sdk::oss;
 
@@ -181,6 +183,24 @@ fn put_object_presigned_url_test() {
         .x_metas([("key3", "value3"), ("key4", "value4")])
         .build()
         .generate_presigned_url("test/k-sample.toml", 300);
+    println!("res: {:#?}", res);
+}
+
+#[test]
+#[ignore]
+fn generate_post_object_policy_test() {
+    let now = OffsetDateTime::now_utc();
+    let client = get_oss_client();
+    let res = client
+        .post_object()
+        .content_length_range((1, 1 * 1024 * 1024))
+        .key(("eq".to_owned(), "test2/t-sample.txt".to_owned()))
+        .x_oss_forbid_overwrite("true".to_owned())
+        .x_oss_content_type("text/plain".to_owned())
+        .x_meta("kk1", ("eq", "vv1"))
+        .x_metas([("kk2", ("eq", "vv2")), ("kk3", ("starts-with", "vv3"))])
+        .build()
+        .generate_policy(now + Duration::from_secs(900));
     println!("res: {:#?}", res);
 }
 

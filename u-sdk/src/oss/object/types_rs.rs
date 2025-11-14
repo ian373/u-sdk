@@ -2,10 +2,13 @@ use super::super::Client;
 use crate::oss::Error;
 use crate::oss::utils::validate_object_name;
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use std::collections::HashMap;
 use std::path::Path;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc2822;
 
 // region:    --- pub object
 /// Header字段中：
@@ -90,6 +93,268 @@ pub struct PutObjectResponseHeader {
     pub x_oss_version_id: Option<String>,
 }
 // endregion: --- pub object
+
+// region post object
+/// 此方法用于预签名生成给前端使用，如果需要使用sdk上传使用[PutObject]方法
+///
+/// 注意：上传的签名在有效期内都可以使用，要考虑恶意多次上传等等；所以限制条件要写好
+#[derive(Builder)]
+pub struct PostObject<'a> {
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+    // PostObject API 表单元素的x-meta-*
+    #[builder(field)]
+    pub(crate) custom_metas: HashMap<String, (String, String)>,
+
+    // POST v4签名表单元素
+    pub(crate) bucket: Option<String>,
+    pub(crate) x_oss_security_token: Option<String>,
+    // (min, max)
+    pub(crate) content_length_range: Option<(i32, i32)>,
+    pub(crate) success_action_status: Option<(String, String)>,
+    /// 前端请求的时候表单必须要有key字段，如果这里为None，就意味着前端的key字段可以是任意值，没有限制
+    pub(crate) key: Option<(String, String)>,
+    pub(crate) content_type: Option<(String, Vec<String>)>,
+    pub(crate) cache_control: Option<(String, Vec<String>)>,
+
+    // PostObject API 表单元素
+    pub(crate) content_disposition: Option<(String, String)>,
+    pub(crate) content_encoding: Option<String>,
+    pub(crate) expires: Option<OffsetDateTime>,
+    // policy是前端添加的必带字段，由后端生成并传给前端
+    // policy: Option<String>,
+    pub(crate) x_oss_server_side_data_encryption: Option<String>,
+    pub(crate) x_oss_server_side_encryption_key_id: Option<String>,
+    pub(crate) x_oss_content_type: Option<String>,
+    pub(crate) x_oss_forbid_overwrite: Option<String>,
+    pub(crate) x_oss_object_acl: Option<String>,
+    pub(crate) x_oss_storage_class: Option<String>,
+    pub(crate) success_action_redirect: Option<(String, String)>,
+    // x-oss-meta-*，由于bon的顺序要求放到了前面
+    // file
+}
+
+impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
+    fn custom_metas_mut(&mut self) -> &mut HashMap<String, (String, String)> {
+        &mut self.custom_metas
+    }
+
+    pub fn x_meta(mut self, key: &'a str, val: (&'a str, &'a str)) -> Self {
+        self.custom_metas_mut().insert(
+            format!("x-oss-meta-{key}"),
+            (val.0.to_owned(), val.1.to_owned()),
+        );
+        self
+    }
+
+    pub fn x_metas(
+        mut self,
+        metas: impl IntoIterator<Item = (&'a str, (&'a str, &'a str))>,
+    ) -> Self {
+        for (key, val) in metas {
+            self.custom_metas_mut().insert(
+                format!("x-oss-meta-{key}"),
+                (val.0.to_owned(), val.1.to_owned()),
+            );
+        }
+        self
+    }
+}
+
+#[derive(Serialize)]
+pub(crate) struct PostPolicy {
+    pub expiration: String,
+    #[serde(serialize_with = "serialize_conditions")]
+    pub conditions: PostPolicyCondition,
+}
+
+/// 不用担心转义问题，serde_json会自动处理
+pub(crate) struct PostPolicyCondition {
+    // POST v4签名表单元素（字段）
+    pub(crate) bucket: Option<String>,
+    // 固定为`OSS4-HMAC-SHA256`，自动添加
+    pub(crate) x_oss_signature_version: String,
+    pub(crate) x_oss_credential: String,
+    pub(crate) x_oss_security_token: Option<String>,
+    pub(crate) x_oss_date: String,
+    // (min, max)
+    pub(crate) content_length_range: Option<(i32, i32)>,
+    pub(crate) success_action_status: Option<(String, String)>,
+    pub(crate) key: Option<(String, String)>,
+    pub(crate) content_type: Option<(String, Vec<String>)>,
+    pub(crate) cache_control: Option<(String, Vec<String>)>,
+
+    // PostObject API 表单元素（字段）
+    // PostObject API 表单元素
+    pub(crate) content_disposition: Option<(String, String)>,
+    pub(crate) content_encoding: Option<String>,
+    pub(crate) expires: Option<OffsetDateTime>,
+    pub(crate) x_oss_server_side_data_encryption: Option<String>,
+    pub(crate) x_oss_server_side_encryption_key_id: Option<String>,
+    pub(crate) x_oss_content_type: Option<String>,
+    pub(crate) x_oss_forbid_overwrite: Option<String>,
+    pub(crate) x_oss_object_acl: Option<String>,
+    pub(crate) x_oss_storage_class: Option<String>,
+    pub(crate) success_action_redirect: Option<(String, String)>,
+    pub(crate) custom_metas: HashMap<String, (String, String)>,
+}
+
+/*
+policy 示例：
+{
+    "expiration": "2023-12-03T13:00:00.000Z",
+    "conditions": [
+        // 这类一般用`对象写法`表达精确匹配
+        {"bucket": "examplebucket"},
+        {"x-oss-signature-version": "OSS4-HMAC-SHA256"},
+        {"x-oss-credential": "AKIDEXAMPLE/20231203/cn-hangzhou/oss/aliyun_v4_request"},
+        {"x-oss-security-token": "CAIS******"},
+        {"x-oss-date": "20231203T121212Z"},
+        // content-length-range 只能用：
+        ["content-length-range", 1, 10],
+        // 可以用 eq / starts-with / in / not-in 的字段
+        ["eq", "$success_action_status", "201"],
+        ["starts-with", "$key", "user/eric/"],
+        ["in", "$content-type", ["image/jpg", "image/png"]],
+        ["not-in", "$cache-control", ["no-cache"]]
+    ]
+}
+
+前端拿到policy后请求的表单域示例：
+{
+    // 要求必带的字段
+    policy: "xxx",  // 后端传过来的policy，
+    key： "xxx"，  // 如果policy有指定的限制则按照限制填写，否则可以是任意值
+    // ...其他policy中指定的PostObject API 表单元素和内容规则
+    file: <file>,  // 最后一个字段必须是file
+}
+*/
+
+// 把 PostPolicyCondition 转成 Vec<serde_json::Value>
+fn conditions_to_json_array(cond: &PostPolicyCondition) -> Vec<Value> {
+    let mut arr = Vec::new();
+
+    // {"bucket": "examplebucket"}
+    if let Some(bucket) = &cond.bucket {
+        arr.push(json!({ "bucket": bucket }));
+    }
+
+    // {"x-oss-signature-version": "OSS4-HMAC-SHA256"}
+    arr.push(json!({
+        "x-oss-signature-version": &cond.x_oss_signature_version
+    }));
+
+    // {"x-oss-credential": "..."}
+    arr.push(json!({
+        "x-oss-credential": &cond.x_oss_credential
+    }));
+
+    // {"x-oss-security-token": "..."}
+    if let Some(token) = &cond.x_oss_security_token {
+        arr.push(json!({
+            "x-oss-security-token": token
+        }));
+    }
+
+    // {"x-oss-date": "..."}
+    arr.push(json!({
+        "x-oss-date": &cond.x_oss_date
+    }));
+
+    // ["content-length-range", 1, 10]
+    if let Some((min, max)) = cond.content_length_range {
+        arr.push(json!(["content-length-range", min, max]));
+    }
+
+    // ["eq", "$success_action_status", "201"]
+    if let Some((op, value)) = &cond.success_action_status {
+        // 文档字段名称就是下划线success_action_status
+        arr.push(json!([op, "$success_action_status", value]));
+    }
+
+    // ["starts-with", "$key", "user/eric/"]
+    if let Some((op, value)) = &cond.key {
+        arr.push(json!([op, "$key", value]));
+    }
+
+    // ["in", "$content-type", ["image/jpg", "image/png"]]
+    if let Some((op, values)) = &cond.content_type {
+        arr.push(json!([op, "$content-type", values]));
+    }
+
+    // ["not-in", "$cache-control", ["no-cache"]]
+    if let Some((op, values)) = &cond.cache_control {
+        arr.push(json!([op, "$cache-control", values]));
+    }
+
+    // ==========================================================
+    // PostObject API 表单元素（字段）
+    // chatgpt 说`Cache-Control, Content-Type, Content-Disposition, Content-Encoding, Expires
+    // 等 HTTP Header 作为表单域传递，支持精确匹配和前缀匹配方式。
+    if let Some((op, value)) = &cond.content_disposition {
+        arr.push(json!([op, "$content-disposition", value]));
+    }
+    if let Some(encoding) = &cond.content_encoding {
+        arr.push(json!(["eq", "$content-encoding", encoding]));
+    }
+    if let Some(expires) = &cond.expires {
+        arr.push(json!(["eq", "$expires", expires.format(&Rfc2822).unwrap()]));
+    }
+    if let Some(encryption) = &cond.x_oss_server_side_data_encryption {
+        arr.push(json!([
+            "eq",
+            "$x-oss-server-side-data-encryption",
+            encryption
+        ]));
+    }
+    if let Some(key_id) = &cond.x_oss_server_side_encryption_key_id {
+        arr.push(json!([
+            "eq",
+            "$x-oss-server-side-encryption-key-id",
+            key_id
+        ]));
+    }
+    if let Some(content_type) = &cond.x_oss_content_type {
+        arr.push(json!(["eq", "$x-oss-content-type", content_type]));
+    }
+    if let Some(forbid) = &cond.x_oss_forbid_overwrite {
+        arr.push(json!(["eq", "$x-oss-forbid-overwrite", forbid]));
+    }
+    if let Some(acl) = &cond.x_oss_object_acl {
+        arr.push(json!(["eq", "$x-oss-object-acl", acl]));
+    }
+    if let Some(storage_class) = &cond.x_oss_storage_class {
+        arr.push(json!(["eq", "$x-oss-storage-class", storage_class]));
+    }
+    if let Some((op, value)) = &cond.success_action_redirect {
+        arr.push(json!([op, "$success_action_redirect", value]));
+    }
+    if !cond.custom_metas.is_empty() {
+        for (key, (op, value)) in &cond.custom_metas {
+            arr.push(json!([op, format!("${}", key), value]));
+        }
+    }
+
+    arr
+}
+
+fn serialize_conditions<S>(cond: &PostPolicyCondition, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let arr = conditions_to_json_array(cond);
+    arr.serialize(serializer)
+}
+
+#[derive(Debug)]
+pub struct GeneratePolicyResult {
+    pub policy: String,
+    pub signature: String,
+    pub credential: String,
+    pub date_time: String,
+}
+
+// endregion
 
 // region:    --- get object
 /* 想做成嵌套的builder的，即类似于：

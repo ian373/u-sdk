@@ -8,15 +8,18 @@ use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
     compute_md5_from_file, generate_presigned_url, get_content_md5, get_request_header,
-    into_request_failed_error, parse_get_object_response_header, parse_xml_response,
-    validate_object_name,
+    into_request_failed_error, parse_get_object_response_header, parse_xml_response, utc_date_str,
+    utc_date_time_str, validate_object_name,
 };
+use base64::{Engine, engine::general_purpose};
 use bytes::Bytes;
 use reqwest::Body;
 use reqwest::header::HeaderMap;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::Path;
+use time::OffsetDateTime;
+use time::format_description::well_known::Iso8601;
 use tokio::io::AsyncWriteExt;
 use tokio_stream::{Stream, StreamExt};
 use tokio_util::io::ReaderStream;
@@ -137,6 +140,78 @@ impl<'a> PutObject<'a> {
         let signed_url =
             generate_presigned_url(client, header_map, base_url, HTTPVerb::Put, expires);
         Ok(signed_url)
+    }
+}
+
+fn hmac_sha256_bytes(key: &[u8], msg: &str) -> Vec<u8> {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).unwrap();
+    mac.update(msg.as_bytes());
+    let result = mac.finalize();
+    result.into_bytes().to_vec()
+}
+
+impl PostObject<'_> {
+    pub fn generate_policy(
+        self,
+        expiration: OffsetDateTime,
+    ) -> Result<GeneratePolicyResult, Error> {
+        let policy_expiration = expiration.to_utc().format(&Iso8601::DEFAULT).unwrap();
+        let now = OffsetDateTime::now_utc();
+        // 这个date，需不需utc，文档没说...
+        let date = utc_date_str(&now);
+        let date_time = utc_date_time_str(&now);
+        let client = self.client;
+        let credential = format!(
+            "{}/{}/{}/oss/aliyun_v4_request",
+            client.access_key_id, date, client.region
+        );
+        let policy = PostPolicy {
+            expiration: policy_expiration,
+            conditions: PostPolicyCondition {
+                bucket: self.bucket,
+                x_oss_signature_version: "OSS4-HMAC-SHA256".to_owned(),
+                x_oss_credential: credential.clone(),
+                x_oss_security_token: self.x_oss_security_token,
+                x_oss_date: date_time.clone(),
+                content_length_range: self.content_length_range,
+                key: self.key,
+                success_action_status: self.success_action_status,
+                content_type: self.content_type,
+                cache_control: self.cache_control,
+                expires: self.expires,
+                content_disposition: self.content_disposition,
+                content_encoding: self.content_encoding,
+                x_oss_object_acl: self.x_oss_object_acl,
+                x_oss_server_side_encryption_key_id: self.x_oss_server_side_encryption_key_id,
+                x_oss_server_side_data_encryption: self.x_oss_server_side_data_encryption,
+                x_oss_content_type: self.x_oss_content_type,
+                x_oss_forbid_overwrite: self.x_oss_forbid_overwrite,
+                x_oss_storage_class: self.x_oss_storage_class,
+                success_action_redirect: self.success_action_redirect,
+                custom_metas: self.custom_metas,
+            },
+        };
+        let policy_str = serde_json::to_string(&policy).unwrap();
+        let encoded_policy = general_purpose::STANDARD.encode(policy_str.as_bytes());
+
+        let date_key = hmac_sha256_bytes(
+            format!("aliyun_v4{}", client.access_key_secret).as_bytes(),
+            &date,
+        );
+        let date_region_key = hmac_sha256_bytes(&date_key, &client.region);
+        let date_region_service_key = hmac_sha256_bytes(&date_region_key, "oss");
+        let signing_key = hmac_sha256_bytes(&date_region_service_key, "aliyun_v4_request");
+        let signature = hex::encode(hmac_sha256_bytes(&signing_key, &encoded_policy));
+
+        Ok(GeneratePolicyResult {
+            policy: encoded_policy,
+            signature,
+            date_time,
+            credential,
+        })
     }
 }
 
@@ -449,6 +524,10 @@ impl HeadObject<'_> {
 impl Client {
     pub fn put_object(&self) -> PutObjectBuilder<'_> {
         PutObject::builder(self)
+    }
+
+    pub fn post_object(&self) -> PostObjectBuilder<'_> {
+        PostObject::builder(self)
     }
 
     pub fn get_object(&self) -> GetObjectBuilder<'_> {
