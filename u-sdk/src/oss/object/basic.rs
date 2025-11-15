@@ -13,8 +13,8 @@ use crate::oss::utils::{
 };
 use base64::{Engine, engine::general_purpose};
 use bytes::Bytes;
-use reqwest::Body;
 use reqwest::header::HeaderMap;
+use reqwest::{Body, StatusCode};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::Path;
@@ -68,6 +68,25 @@ impl<'a> PutObject<'a> {
             req_header_map.extend(custom_meta_map);
         };
 
+        if let Some(oss_callback) = &self.callback {
+            let callback_base64 =
+                general_purpose::STANDARD.encode(serde_json::to_string(oss_callback).unwrap());
+            // println!("callback_base64: {}", &callback_base64);
+            req_header_map.insert("x-oss-callback".to_owned(), callback_base64);
+            if !oss_callback.callback_body.callback_var.is_empty() {
+                let callback_var_map = oss_callback
+                    .callback_body
+                    .callback_var
+                    .iter()
+                    .map(|(_, k, v)| (k, v))
+                    .collect::<HashMap<_, _>>();
+                let callback_var_base64 = general_purpose::STANDARD
+                    .encode(serde_json::to_string(&callback_var_map).unwrap());
+                // println!("callback_var_base64: {}", &callback_var_base64);
+                req_header_map.insert("x-oss-callback-var".to_owned(), callback_var_base64);
+            }
+        }
+
         let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Put);
 
         let data = match object {
@@ -86,8 +105,10 @@ impl<'a> PutObject<'a> {
             .body(data)
             .send()
             .await?;
+        // println!("response: {:#?}", resp);
 
-        if !resp.status().is_success() {
+        // 如果上传成功，但是使用callback的时候应用服务器端没有响应导致回调失败，会返回203
+        if resp.status() != StatusCode::OK {
             return Err(into_request_failed_error(resp).await);
         }
 
