@@ -139,6 +139,9 @@ impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
         &mut self.custom_metas
     }
 
+    /// 添加`x-oss-meta-{key}: val`，其中val是一个元组，表示操作符和值，例如：("eq", "value")
+    ///
+    /// `key`不需要包含`x-oss-meta-`前缀，函数会自动添加
     pub fn x_meta(mut self, key: &'a str, val: (&'a str, &'a str)) -> Self {
         self.custom_metas_mut().insert(
             format!("x-oss-meta-{key}"),
@@ -147,6 +150,7 @@ impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
         self
     }
 
+    /// 批量添加`x-oss-meta-{key}: val`
     pub fn x_metas(
         mut self,
         metas: impl IntoIterator<Item = (&'a str, (&'a str, &'a str))>,
@@ -185,7 +189,6 @@ pub(crate) struct PostPolicyCondition {
     pub(crate) cache_control: Option<(String, Vec<String>)>,
 
     // PostObject API 表单元素（字段）
-    // PostObject API 表单元素
     pub(crate) content_disposition: Option<(String, String)>,
     pub(crate) content_encoding: Option<String>,
     pub(crate) expires: Option<OffsetDateTime>,
@@ -348,6 +351,7 @@ where
 
 #[derive(Debug)]
 pub struct GeneratePolicyResult {
+    /// base64编码后的policy字符串
     pub policy: String,
     pub signature: String,
     pub credential: String,

@@ -8,8 +8,8 @@ use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
     compute_md5_from_file, generate_presigned_url, get_content_md5, get_request_header,
-    into_request_failed_error, parse_get_object_response_header, parse_xml_response, utc_date_str,
-    utc_date_time_str, validate_object_name,
+    hmac_sha256_bytes, into_request_failed_error, parse_get_object_response_header,
+    parse_xml_response, utc_date_str, utc_date_time_str, validate_object_name,
 };
 use base64::{Engine, engine::general_purpose};
 use bytes::Bytes;
@@ -117,7 +117,11 @@ impl<'a> PutObject<'a> {
 
     /// [OSS不直接提供限制上传文件类型和大小的功能](https://help.aliyun.com/zh/oss/how-do-i-limit-object-formats-and-sizes-when-i-upload-objects-to-oss)
     ///
-    /// - 生成上传的预签名URL
+    /// 生成用于上传的预签名URL（Presigned URL），生成的url使用PUT方法上传文件
+    ///
+    /// # 参数
+    /// - `object_name`：要上传的对象名称。必须遵守 [OSS Object 命名规则](https://help.aliyun.com/zh/oss/user-guide/object-overview#720fde5f0asvg)。
+    /// - `expires`：URL 的有效期，单位为秒。过期后将无法使用。
     pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
@@ -143,17 +147,14 @@ impl<'a> PutObject<'a> {
     }
 }
 
-fn hmac_sha256_bytes(key: &[u8], msg: &str) -> Vec<u8> {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
-
-    let mut mac = Hmac::<Sha256>::new_from_slice(key).unwrap();
-    mac.update(msg.as_bytes());
-    let result = mac.finalize();
-    result.into_bytes().to_vec()
-}
-
 impl PostObject<'_> {
+    /// 生成用于浏览器表单方式上传所需要的内容
+    ///
+    /// - [oss Post v4 签名文档](https://help.aliyun.com/zh/oss/developer-reference/signature-version-4-recommend)
+    /// - [PostObject API文档](https://help.aliyun.com/zh/oss/developer-reference/postobject)
+    ///
+    /// # 参数
+    /// - `expiration`：策略过期时间
     pub fn generate_policy(
         self,
         expiration: OffsetDateTime,

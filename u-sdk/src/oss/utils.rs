@@ -38,6 +38,16 @@ pub fn get_content_md5(bytes: &[u8]) -> String {
     general_purpose::STANDARD.encode(res)
 }
 
+pub fn hmac_sha256_bytes(key: &[u8], msg: &str) -> Vec<u8> {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).unwrap();
+    mac.update(msg.as_bytes());
+    let result = mac.finalize();
+    result.into_bytes().to_vec()
+}
+
 #[test]
 fn get_content_md5_test() {
     let s = get_content_md5(b"0123456789");
