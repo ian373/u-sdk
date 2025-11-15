@@ -193,7 +193,7 @@ fn generate_post_object_policy_test() {
     let client = get_oss_client();
     let res = client
         .post_object()
-        .content_length_range((1, 1 * 1024 * 1024))
+        .content_length_range((1, 1024 * 1024))
         .key(("eq".to_owned(), "test2/t-sample.txt".to_owned()))
         .x_oss_forbid_overwrite("true".to_owned())
         .x_oss_content_type("text/plain".to_owned())
