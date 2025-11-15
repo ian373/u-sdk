@@ -8,9 +8,25 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use time::macros::format_description;
 use tokio::io::AsyncReadExt;
 use u_sdk_common::helper::gmt_format;
 use url::Url;
+
+pub fn utc_date_str(date_time: &time::OffsetDateTime) -> String {
+    date_time
+        .to_utc()
+        .format(format_description!("[year][month][day]"))
+        .unwrap()
+}
+pub fn utc_date_time_str(date_time: &time::OffsetDateTime) -> String {
+    date_time
+        .to_utc()
+        .format(format_description!(
+            "[year][month][day]T[hour][minute][second]Z"
+        ))
+        .unwrap()
+}
 
 pub fn get_content_md5(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};
@@ -20,6 +36,16 @@ pub fn get_content_md5(bytes: &[u8]) -> String {
     let res = hasher.finalize();
 
     general_purpose::STANDARD.encode(res)
+}
+
+pub fn hmac_sha256_bytes(key: &[u8], msg: &str) -> Vec<u8> {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).unwrap();
+    mac.update(msg.as_bytes());
+    let result = mac.finalize();
+    result.into_bytes().to_vec()
 }
 
 #[test]
@@ -250,15 +276,17 @@ pub(crate) fn generate_presigned_url(
     http_verb: HTTPVerb,
     url_expires: i32,
 ) -> String {
+    let (header_map, remaining_map) = partition_header(header_map);
     let mut canonical_header = BTreeMap::new();
+    canonical_header.extend(header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     let host = presigned_url.host_str().unwrap().to_owned();
     canonical_header.insert("host", host.as_str());
 
     let mut additional_header = BTreeSet::new();
     additional_header.insert("host");
 
-    for (k, v) in &header_map {
-        canonical_header.insert(k, v);
+    for (k, v) in &remaining_map {
+        canonical_header.insert(k.as_str(), v.as_str());
         additional_header.insert(k.as_str());
     }
 

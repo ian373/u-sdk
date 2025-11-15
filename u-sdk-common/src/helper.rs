@@ -8,11 +8,19 @@ use time::format_description::well_known::iso8601::{
     Config, EncodedConfig, Iso8601, TimePrecision,
 };
 
+/// 输出格式: Day, DD Mon YYYY hh:mm:ss GMT
+///
+/// eg: Thu, 13 Nov 2025 13:32:03 GMT
+//  TODO 似乎不需要替换+0000为GMT，可以直接使用Rfc2822格式，测试一下到时后
 pub fn gmt_format(date_time: &OffsetDateTime) -> String {
     use time::format_description::well_known::Rfc2822;
     date_time.format(&Rfc2822).unwrap().replace("+0000", "GMT")
 }
 
+/// 输出格式: YYYY-MM-DDThh:mm:ssZ
+///
+/// eg: 2025-11-13T13:31:09Z
+//  TODO 似乎不需要把精度设置为秒，可以直接使用默认的ISO 8601格式，测试一下到时后
 pub fn now_iso8601() -> String {
     const ENCODED_CONFIG: EncodedConfig = Config::DEFAULT
         .set_time_precision(TimePrecision::Second {
