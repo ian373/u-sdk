@@ -259,13 +259,12 @@ pub(crate) fn get_request_header(
 }
 
 pub(crate) fn get_date_str(data: &time::OffsetDateTime) -> String {
-    let date_format = time::format_description::parse("[year][month][day]").unwrap();
+    let date_format = format_description!("[year][month][day]");
     data.format(&date_format).unwrap()
 }
 
 pub(crate) fn get_date_time_str(data: &time::OffsetDateTime) -> String {
-    let data_time_format =
-        time::format_description::parse("[year][month][day]T[hour][minute][second]Z").unwrap();
+    let data_time_format = format_description!("[year][month][day]T[hour][minute][second]Z");
     data.format(&data_time_format).unwrap()
 }
 
