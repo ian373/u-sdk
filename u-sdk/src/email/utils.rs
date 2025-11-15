@@ -25,6 +25,7 @@ pub(crate) fn sign_params(
         .remove(b'_')
         .remove(b'.')
         .remove(b'~');
+    // TODO 这里的编码可能需要处理中文？并使用utf8_percent_encode?
     let percent_encode_string =
         percent_encode(canonical_query_string.as_bytes(), FRAGMENT).to_string();
 

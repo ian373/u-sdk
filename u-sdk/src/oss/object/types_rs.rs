@@ -2,6 +2,7 @@ use super::super::Client;
 use crate::oss::Error;
 use crate::oss::utils::validate_object_name;
 use bon::Builder;
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
@@ -52,6 +53,9 @@ pub struct PutObject<'a> {
     // x-oss-meta-*  将由custom_metas转换为`x-oss-meta-key: value`形式添加
     x_oss_tagging: Option<&'a str>,
     // endregion
+    // callback
+    #[serde(skip_serializing)]
+    pub(crate) callback: Option<OssCallBack>,
 }
 
 pub trait OssMetaExt<'a>: Sized {
@@ -667,5 +671,292 @@ pub struct GetObjectMetaResponseHeader {
     pub x_oss_last_access_time: Option<String>,
     pub last_modified: String,
     pub x_oss_version_id: Option<String>,
+}
+// endregion
+
+// region callback
+
+/// [oss callback文档](https://help.aliyun.com/zh/oss/developer-reference/callback#19f2e6eb46b27)
+#[derive(Builder)]
+pub struct OssCallBack {
+    #[builder(field)]
+    // callback_url是必须要有的参数，但是这里使用Vec来收集(builder(field))，会使得这个参数变成非必须的了
+    callback_url: Vec<String>,
+    pub(crate) callback_body: CallBackBody,
+    callback_host: Option<String>,
+    callback_sni: Option<bool>,
+    callback_body_type: Option<CallbackBodyType>,
+}
+
+#[derive(Serialize, Debug)]
+pub enum CallbackBodyType {
+    #[serde(rename = "application/json")]
+    Json,
+    #[serde(rename = "application/x-www-form-urlencoded")]
+    UrlEncoded,
+}
+
+impl<S: oss_call_back_builder::State> OssCallBackBuilder<S> {
+    pub fn callback_url<'a>(mut self, urls: impl IntoIterator<Item = &'a str>) -> Self {
+        for url in urls {
+            self.callback_url.push(url.to_string());
+        }
+        self
+    }
+}
+
+fn callback_url_serialize<S: Serializer>(
+    urls: &Vec<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    // 定义一个编码集合：我们希望编码所有非字母／数字／-_.~，并且还要编码空格、中文、特殊符号等
+    const ENCODE_SET: &AsciiSet = &CONTROLS
+        .add(b' ') // 空格
+        .add(b'"') // 引号
+        .add(b'<')
+        .add(b'>')
+        .add(b'`');
+    // 你也可以添加更多你想强制编码的字符
+    let mut v = vec![];
+    for url in urls {
+        let encoded_url = utf8_percent_encode(url, ENCODE_SET).to_string();
+        v.push(encoded_url);
+    }
+    let res = v.join(";");
+    serializer.serialize_str(&res)
+}
+
+impl Serialize for OssCallBack {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let callback_body_serialized = match &self.callback_body_type {
+            Some(CallbackBodyType::Json) => self.callback_body.to_serialized_json_string(),
+            _ => self.callback_body.to_serialized_kv_string(),
+        };
+
+        #[serde_with::skip_serializing_none]
+        #[derive(Serialize, Debug)]
+        #[serde(rename_all = "camelCase")]
+        struct OssCallBackHelper<'a> {
+            // 这里继续复用你原来的自定义序列化函数
+            #[serde(serialize_with = "callback_url_serialize")]
+            callback_url: &'a Vec<String>,
+            callback_body: String,
+            callback_host: Option<&'a String>,
+            #[serde(rename = "callbackSNI")]
+            callback_sni: Option<bool>,
+            callback_body_type: Option<&'a CallbackBodyType>,
+        }
+
+        let helper = OssCallBackHelper {
+            callback_url: &self.callback_url,
+            callback_body: callback_body_serialized,
+            callback_host: self.callback_host.as_ref(),
+            callback_sni: self.callback_sni,
+            callback_body_type: self.callback_body_type.as_ref(),
+        };
+
+        helper.serialize(serializer)
+    }
+}
+
+#[derive(Builder)]
+pub struct CallBackBody {
+    // callback-var
+    #[builder(field)]
+    // 表示形式: (callbackBody中的key, callback-var中的key, value)，最终会组成:
+    // callbackBody: "key=${x:var_key}", callback-var: {"var_key": "value"}
+    pub(crate) callback_var: Vec<(String, String, String)>,
+    // callbackBody支持的系统参数
+    #[builder(default)]
+    bucket: bool,
+    #[builder(default)]
+    object: bool,
+    #[builder(default)]
+    e_tag: bool,
+    #[builder(default)]
+    size: bool,
+    #[builder(default)]
+    mime_type: bool,
+    #[builder(default)]
+    image_info_height: bool,
+    #[builder(default)]
+    image_info_width: bool,
+    #[builder(default)]
+    image_info_format: bool,
+    #[builder(default)]
+    crc64: bool,
+    #[builder(default)]
+    content_md5: bool,
+    #[builder(default)]
+    vpc_id: bool,
+    #[builder(default)]
+    client_ip: bool,
+    #[builder(default)]
+    req_id: bool,
+    #[builder(default)]
+    operation: bool,
+}
+
+impl<S: call_back_body_builder::State> CallBackBodyBuilder<S> {
+    /// 设置callbackBody中的key，callback-var中的key和callback-var中的value
+    pub fn var(mut self, body_key: &str, var_key: &str, var_value: &str) -> Self {
+        self.callback_var.push((
+            body_key.to_owned(),
+            var_key.to_owned(),
+            var_value.to_owned(),
+        ));
+        self
+    }
+
+    /// (body_key, var_key, var_value) 三元组的批量添加
+    pub fn vars<'a>(mut self, vars: impl IntoIterator<Item = (&'a str, &'a str, &'a str)>) -> Self {
+        for (body_key, var_key, var_value) in vars {
+            self.callback_var.push((
+                body_key.to_owned(),
+                var_key.to_owned(),
+                var_value.to_owned(),
+            ));
+        }
+        self
+    }
+}
+
+impl CallBackBody {
+    // 这里没必要实现两种序列化方式，因为这个工作本来就是sdk做的，只要实现一种就行了...
+    pub(crate) fn to_serialized_kv_string(&self) -> String {
+        let mut body_list = vec![];
+
+        if self.bucket {
+            body_list.push("bucket=${bucket}".to_owned());
+        }
+        if self.object {
+            body_list.push("object=${object}".to_owned());
+        }
+        if self.e_tag {
+            body_list.push("etag=${etag}".to_owned().to_owned());
+        }
+        if self.size {
+            body_list.push("size=${size}".to_owned());
+        }
+        if self.mime_type {
+            body_list.push("mimeType=${mimeType}".to_owned());
+        }
+        if self.image_info_height {
+            body_list.push("imageInfo.height=${imageInfo.height}".to_owned());
+        }
+        if self.image_info_width {
+            body_list.push("imageInfo.width=${imageInfo.width}".to_owned());
+        }
+        if self.image_info_format {
+            body_list.push("imageInfo.format=${imageInfo.format}".to_owned());
+        }
+        if self.crc64 {
+            body_list.push("crc64=${crc64}".to_owned());
+        }
+        if self.content_md5 {
+            body_list.push("contentMd5=${contentMd5}".to_owned());
+        }
+        if self.vpc_id {
+            body_list.push("vpcId=${vpcId}".to_owned());
+        }
+        if self.client_ip {
+            body_list.push("clientIp=${clientIp}".to_owned());
+        }
+        if self.req_id {
+            body_list.push("reqId=${reqId}".to_owned());
+        }
+        if self.operation {
+            body_list.push("operation=${operation}".to_owned());
+        }
+
+        if !self.callback_var.is_empty() {
+            for (k1, k2, _) in &self.callback_var {
+                body_list.push(format!("{}=${{x:{}}}", k1, k2));
+            }
+        }
+
+        body_list.join("&")
+    }
+
+    pub(crate) fn to_serialized_json_string(&self) -> String {
+        use serde_json::{Map, Value};
+
+        let mut obj = Map::new();
+
+        if self.bucket {
+            obj.insert("bucket".to_owned(), Value::String("${bucket}".to_owned()));
+        }
+        if self.object {
+            obj.insert("object".to_owned(), Value::String("${object}".to_owned()));
+        }
+        if self.e_tag {
+            obj.insert("etag".to_owned(), Value::String("${etag}".to_owned()));
+        }
+        if self.size {
+            obj.insert("size".to_owned(), Value::String("${size}".to_owned()));
+        }
+        if self.mime_type {
+            obj.insert(
+                "mimeType".to_owned(),
+                Value::String("${mimeType}".to_owned()),
+            );
+        }
+        if self.image_info_height {
+            obj.insert(
+                "imageInfo.height".to_owned(),
+                Value::String("${imageInfo.height}".to_owned()),
+            );
+        }
+        if self.image_info_width {
+            obj.insert(
+                "imageInfo.width".to_owned(),
+                Value::String("${imageInfo.width}".to_owned()),
+            );
+        }
+        if self.image_info_format {
+            obj.insert(
+                "imageInfo.format".to_owned(),
+                Value::String("${imageInfo.format}".to_owned()),
+            );
+        }
+        if self.crc64 {
+            obj.insert("crc64".to_owned(), Value::String("${crc64}".to_owned()));
+        }
+        if self.content_md5 {
+            obj.insert(
+                "contentMd5".to_owned(),
+                Value::String("${contentMd5}".to_owned()),
+            );
+        }
+        if self.vpc_id {
+            obj.insert("vpcId".to_owned(), Value::String("${vpcId}".to_owned()));
+        }
+        if self.client_ip {
+            obj.insert(
+                "clientIp".to_owned(),
+                Value::String("${clientIp}".to_owned()),
+            );
+        }
+        if self.req_id {
+            obj.insert("reqId".to_owned(), Value::String("${reqId}".to_owned()));
+        }
+        if self.operation {
+            obj.insert(
+                "operation".to_owned(),
+                Value::String("${operation}".to_owned()),
+            );
+        }
+
+        if !self.callback_var.is_empty() {
+            for (k1, k2, _) in &self.callback_var {
+                obj.insert(k1.to_owned(), Value::String(format!("${{x:{}}}", k2)));
+            }
+        }
+
+        serde_json::to_string(&obj).unwrap()
+    }
 }
 // endregion
