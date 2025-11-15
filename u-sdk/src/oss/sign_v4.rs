@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 use time::OffsetDateTime;
+use time::macros::format_description;
 use u_sdk_common::helper::gmt_format;
 use url::Url;
 // 签名文档：https://help.aliyun.com/zh/oss/developer-reference/recommend-to-use-signature-version-4
@@ -121,7 +122,7 @@ impl Client {
     pub(crate) fn sign_v4(&self, sign_v4param: SignV4Param) -> String {
         let date_time = sign_v4param.date_time;
         let date = date_time
-            .format(&time::format_description::parse("[year][month][day]").unwrap())
+            .format(&format_description!("[year][month][day]"))
             .unwrap();
         let date_key = sign_hmac_sha256_byte(
             format!("aliyun_v4{}", self.access_key_secret).as_bytes(),
