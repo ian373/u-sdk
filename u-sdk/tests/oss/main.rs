@@ -7,7 +7,7 @@ use std::time::Duration;
 use time::OffsetDateTime;
 use tokio_stream::StreamExt;
 use u_sdk::oss;
-use u_sdk::oss::object::{CallBackBody, OssCallBack};
+use u_sdk::oss::object::{CallBackBody, CallbackBodyType, OssCallBack};
 
 #[derive(Deserialize, Debug)]
 pub struct AliConfig {
@@ -159,9 +159,10 @@ async fn put_object_test() {
         .vars([("uid", "uid", "1234"), ("order", "order_id", "1234")])
         .build();
     let callback = OssCallBack::builder()
-        .callback_url(["https://example.com/api/callback"])
+        .callback_url(["https://webhook.site/ff5086fe-20db-43d3-803a-b6955c139f88"])
         .callback_body(callback_body)
         .callback_sni(false)
+        .callback_body_type(CallbackBodyType::Json)
         .build();
 
     let res = client
