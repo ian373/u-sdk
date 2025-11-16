@@ -767,7 +767,7 @@ pub struct CallBackBody {
     // callback-var
     #[builder(field)]
     // 表示形式: (callbackBody中的key, callback-var中的key, value)，最终会组成:
-    // callbackBody: "key=${x:var_key}", callback-var: {"var_key": "value"}
+    // callbackBody: "key=${x:var_key}", callback-var: {"x:var_key": "value"}
     pub(crate) callback_var: Vec<(String, String, String)>,
     // callbackBody支持的系统参数
     #[builder(default)]
@@ -801,11 +801,14 @@ pub struct CallBackBody {
 }
 
 impl<S: call_back_body_builder::State> CallBackBodyBuilder<S> {
+    fn var_key_string(var_key: &str) -> String {
+        format!("x:{}", var_key)
+    }
     /// 设置callbackBody中的key，callback-var中的key和callback-var中的value
     pub fn var(mut self, body_key: &str, var_key: &str, var_value: &str) -> Self {
         self.callback_var.push((
             body_key.to_owned(),
-            var_key.to_owned(),
+            Self::var_key_string(var_key),
             var_value.to_owned(),
         ));
         self
@@ -816,7 +819,7 @@ impl<S: call_back_body_builder::State> CallBackBodyBuilder<S> {
         for (body_key, var_key, var_value) in vars {
             self.callback_var.push((
                 body_key.to_owned(),
-                var_key.to_owned(),
+                Self::var_key_string(var_key),
                 var_value.to_owned(),
             ));
         }
@@ -875,7 +878,7 @@ impl CallBackBody {
 
         for (k1, k2, _) in &self.callback_var {
             // k1: 自定义 key，k2: 自定义变量名
-            f(k1, format!("${{x:{}}}", k2));
+            f(k1, format!("${{{}}}", k2));
         }
     }
 
