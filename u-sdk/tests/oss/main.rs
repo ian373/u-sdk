@@ -7,6 +7,7 @@ use std::time::Duration;
 use time::OffsetDateTime;
 use tokio_stream::StreamExt;
 use u_sdk::oss;
+use u_sdk::oss::object::{CallBackBody, CallbackBodyType, OssCallBack};
 
 #[derive(Deserialize, Debug)]
 pub struct AliConfig {
@@ -152,15 +153,28 @@ async fn get_bucket_stat_test() {
 async fn put_object_test() {
     let client = get_oss_client();
 
+    let callback_body = CallBackBody::builder()
+        .bucket(true)
+        .object(true)
+        .vars([("uid", "uid", "1234"), ("order", "order_id", "1234")])
+        .build();
+    let callback = OssCallBack::builder()
+        .callback_url(["https://webhook.site/ff5086fe-20db-43d3-803a-b6955c139f88"])
+        .callback_body(callback_body)
+        .callback_sni(false)
+        .callback_body_type(CallbackBodyType::Json)
+        .build();
+
     let res = client
         .put_object()
         .content_type("text/plain")
         .cache_control("max-age=6666")
         .x_meta("key", "value")
         .x_metas([("key3", "value3"), ("key4", "value4")])
+        .callback(callback)
         .build()
         .send(
-            "test/t-sample.toml",
+            "test-ffb/t-sample.toml",
             PutObjectBody::FilePath(Path::new("tests/oss/config.sample.toml")),
         )
         .await;
