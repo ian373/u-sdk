@@ -706,7 +706,7 @@ impl<S: oss_call_back_builder::State> OssCallBackBuilder<S> {
 }
 
 fn callback_url_serialize<S: Serializer>(
-    urls: &Vec<String>,
+    urls: &[String],
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     // 定义一个编码集合：我们希望编码所有非字母／数字／-_.~，并且还要编码空格、中文、特殊符号等
@@ -825,136 +825,79 @@ impl<S: call_back_body_builder::State> CallBackBodyBuilder<S> {
 }
 
 impl CallBackBody {
-    // 这里没必要实现两种序列化方式，因为这个工作本来就是sdk做的，只要实现一种就行了...
-    pub(crate) fn to_serialized_kv_string(&self) -> String {
-        let mut body_list = vec![];
-
+    fn visit_fields<F>(&self, mut f: F)
+    where
+        // key 用 &str，value 用 String 方便 callback_var 里动态构造
+        F: FnMut(&str, String),
+    {
         if self.bucket {
-            body_list.push("bucket=${bucket}".to_owned());
+            f("bucket", "${bucket}".to_owned());
         }
         if self.object {
-            body_list.push("object=${object}".to_owned());
+            f("object", "${object}".to_owned());
         }
         if self.e_tag {
-            body_list.push("etag=${etag}".to_owned().to_owned());
+            f("etag", "${etag}".to_owned());
         }
         if self.size {
-            body_list.push("size=${size}".to_owned());
+            f("size", "${size}".to_owned());
         }
         if self.mime_type {
-            body_list.push("mimeType=${mimeType}".to_owned());
+            f("mimeType", "${mimeType}".to_owned());
         }
         if self.image_info_height {
-            body_list.push("imageInfo.height=${imageInfo.height}".to_owned());
+            f("imageInfo.height", "${imageInfo.height}".to_owned());
         }
         if self.image_info_width {
-            body_list.push("imageInfo.width=${imageInfo.width}".to_owned());
+            f("imageInfo.width", "${imageInfo.width}".to_owned());
         }
         if self.image_info_format {
-            body_list.push("imageInfo.format=${imageInfo.format}".to_owned());
+            f("imageInfo.format", "${imageInfo.format}".to_owned());
         }
         if self.crc64 {
-            body_list.push("crc64=${crc64}".to_owned());
+            f("crc64", "${crc64}".to_owned());
         }
         if self.content_md5 {
-            body_list.push("contentMd5=${contentMd5}".to_owned());
+            f("contentMd5", "${contentMd5}".to_owned());
         }
         if self.vpc_id {
-            body_list.push("vpcId=${vpcId}".to_owned());
+            f("vpcId", "${vpcId}".to_owned());
         }
         if self.client_ip {
-            body_list.push("clientIp=${clientIp}".to_owned());
+            f("clientIp", "${clientIp}".to_owned());
         }
         if self.req_id {
-            body_list.push("reqId=${reqId}".to_owned());
+            f("reqId", "${reqId}".to_owned());
         }
         if self.operation {
-            body_list.push("operation=${operation}".to_owned());
+            f("operation", "${operation}".to_owned());
         }
 
-        if !self.callback_var.is_empty() {
-            for (k1, k2, _) in &self.callback_var {
-                body_list.push(format!("{}=${{x:{}}}", k1, k2));
-            }
+        for (k1, k2, _) in &self.callback_var {
+            // k1: 自定义 key，k2: 自定义变量名
+            f(k1, format!("${{x:{}}}", k2));
         }
+    }
+
+    /// 生成 KV 形式：bucket=${bucket}&object=${object}&...
+    pub(crate) fn to_serialized_kv_string(&self) -> String {
+        let mut body_list = Vec::new();
+
+        self.visit_fields(|k, v| {
+            body_list.push(format!("{k}={v}"));
+        });
 
         body_list.join("&")
     }
 
+    /// 生成 JSON 形式：{"bucket": "${bucket}", ...}
     pub(crate) fn to_serialized_json_string(&self) -> String {
-        use serde_json::{Map, Value};
+        use serde_json::Map;
 
         let mut obj = Map::new();
-
-        if self.bucket {
-            obj.insert("bucket".to_owned(), Value::String("${bucket}".to_owned()));
-        }
-        if self.object {
-            obj.insert("object".to_owned(), Value::String("${object}".to_owned()));
-        }
-        if self.e_tag {
-            obj.insert("etag".to_owned(), Value::String("${etag}".to_owned()));
-        }
-        if self.size {
-            obj.insert("size".to_owned(), Value::String("${size}".to_owned()));
-        }
-        if self.mime_type {
-            obj.insert(
-                "mimeType".to_owned(),
-                Value::String("${mimeType}".to_owned()),
-            );
-        }
-        if self.image_info_height {
-            obj.insert(
-                "imageInfo.height".to_owned(),
-                Value::String("${imageInfo.height}".to_owned()),
-            );
-        }
-        if self.image_info_width {
-            obj.insert(
-                "imageInfo.width".to_owned(),
-                Value::String("${imageInfo.width}".to_owned()),
-            );
-        }
-        if self.image_info_format {
-            obj.insert(
-                "imageInfo.format".to_owned(),
-                Value::String("${imageInfo.format}".to_owned()),
-            );
-        }
-        if self.crc64 {
-            obj.insert("crc64".to_owned(), Value::String("${crc64}".to_owned()));
-        }
-        if self.content_md5 {
-            obj.insert(
-                "contentMd5".to_owned(),
-                Value::String("${contentMd5}".to_owned()),
-            );
-        }
-        if self.vpc_id {
-            obj.insert("vpcId".to_owned(), Value::String("${vpcId}".to_owned()));
-        }
-        if self.client_ip {
-            obj.insert(
-                "clientIp".to_owned(),
-                Value::String("${clientIp}".to_owned()),
-            );
-        }
-        if self.req_id {
-            obj.insert("reqId".to_owned(), Value::String("${reqId}".to_owned()));
-        }
-        if self.operation {
-            obj.insert(
-                "operation".to_owned(),
-                Value::String("${operation}".to_owned()),
-            );
-        }
-
-        if !self.callback_var.is_empty() {
-            for (k1, k2, _) in &self.callback_var {
-                obj.insert(k1.to_owned(), Value::String(format!("${{x:{}}}", k2)));
-            }
-        }
+        self.visit_fields(|k, v| {
+            obj.insert(k.to_owned(), Value::String(v));
+        });
 
         serde_json::to_string(&obj).unwrap()
     }
