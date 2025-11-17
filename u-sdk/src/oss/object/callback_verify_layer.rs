@@ -1,0 +1,251 @@
+use axum::body::{Body, to_bytes};
+use axum::extract::Request;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use md5::{Digest, Md5};
+use percent_encoding::percent_decode_str;
+use rsa::pkcs8::DecodePublicKey;
+use rsa::signature::hazmat::PrehashVerifier;
+use rsa::{RsaPublicKey, pkcs1v15};
+use std::collections::HashMap;
+use std::pin::Pin;
+use std::sync::{Arc, RwLock};
+use std::task::{Context, Poll};
+use tower::{Layer, Service};
+
+// 用于在 extensions 里挂载已验证的 OSS 回调体（可选）
+// TODO 感觉可以传入一个T:Serialize，然后这里直接反序列化成T
+#[derive(Debug, Clone)]
+pub struct VerifiedOssCallbackBody(pub String);
+
+/// 只支持 tokio + axum
+#[derive(Clone)]
+pub struct OssCallbackVerifyLayer {
+    client: reqwest::Client,
+    // 这里用 Arc 包一层，便于不同 Service 共享缓存
+    cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+}
+
+impl OssCallbackVerifyLayer {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            // 也可以直接用自己的 HashMap，这里示范复用全局缓存
+            cache: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    // 如果你想让多个 Layer / 多 crate 共享同一份缓存，可以用这个构造
+    // pub fn with_global_cache() -> Self {
+    //     Self {
+    //         client: reqwest::Client::new(),
+    //         cache: Arc::new(RwLock::new(GLOBAL_PUB_KEY_CACHE.read().unwrap().clone())),
+    //     }
+    // }
+}
+
+impl Default for OssCallbackVerifyLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<S> Layer<S> for OssCallbackVerifyLayer {
+    type Service = OssCallbackVerifyService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        OssCallbackVerifyService {
+            inner,
+            client: self.client.clone(),
+            cache: Arc::clone(&self.cache),
+        }
+    }
+}
+
+/// 真正的 Service，实现 OSS 验签逻辑
+#[derive(Clone)]
+pub struct OssCallbackVerifyService<S> {
+    inner: S,
+    client: reqwest::Client,
+    cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+}
+
+// 构建Service的过程tower有一个guide: https://github.com/tower-rs/tower/blob/master/guides/building-a-middleware-from-scratch.md
+impl<S> Service<Request<Body>> for OssCallbackVerifyService<S>
+where
+    // 这里要求S: Clone是因为我们在call里需要clone它
+    S: Service<Request<Body>, Response = Response> + Clone + Send + 'static,
+    S::Error: Into<axum::BoxError>,
+    // 这个必须要否则会在call返回的Future里报错，如果没有这个，即使你返回的Future是Send的，编译器也会报错
+    // axum文档中的例子也有：https://docs.rs/axum/latest/axum/middleware/index.html#towerservice-and-pinboxdyn-future
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    // Future 必须是 Send + 'static，因为可能会跨线程（tokio默认是多线程运行时）
+    type Future =
+        Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        // 不直接使用clone，而是使用mem::replace，[文档](https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services)
+        let clone = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, clone);
+        let client = self.client.clone();
+        let cache = Arc::clone(&self.cache);
+
+        Box::pin(async move {
+            // 先做 OSS 验签，如果失败，直接返回 400 Response
+            match verify_oss_request(req, &client, &cache).await {
+                // 这里我们需要把inner clone出来，不能直接用self.inner，否则此时返回的Future的生命周期就不是'static了，而是和self绑定在一起了
+                Ok(verified_req) => inner.call(verified_req).await,
+                Err(resp) => Ok(resp.into_response()),
+            }
+        })
+    }
+}
+
+/// OSS 验签逻辑：
+/// - 成功：返回新的 Request（body 已重建，且 extensions 里挂了 VerifiedOssCallbackBody）
+/// - 失败：返回一个 400 Response
+async fn verify_oss_request(
+    req: Request<Body>,
+    client: &reqwest::Client,
+    cache: &Arc<RwLock<HashMap<String, Vec<u8>>>>,
+) -> Result<Request<Body>, Response> {
+    let (parts, body) = req.into_parts();
+    let headers = parts.headers.clone();
+    let uri = parts.uri.clone();
+
+    // 1. 读 body
+    let body_bytes = to_bytes(body, usize::MAX)
+        .await
+        .map_err(|e| bad_request(format!("read body failed: {e}")))?;
+    let body_str = String::from_utf8(body_bytes.to_vec())
+        .map_err(|e| bad_request(format!("body utf8 error: {e}")))?;
+
+    // 2. 拿 x-oss-pub-key-url 并解码
+    let pub_key_url_b64 = header_required(&headers, "x-oss-pub-key-url")?;
+    let pub_key_url_raw = STANDARD
+        .decode(pub_key_url_b64.as_bytes())
+        .map_err(|e| bad_request(format!("decode x-oss-pub-key-url failed: {e}")))?;
+    let pub_key_url = String::from_utf8(pub_key_url_raw)
+        .map_err(|e| bad_request(format!("x-oss-pub-key-url utf8 error: {e}")))?;
+
+    if !pub_key_url.starts_with("http://gosspublic.alicdn.com/")
+        && !pub_key_url.starts_with("https://gosspublic.alicdn.com/")
+    {
+        return Err(bad_request(format!("invalid pub key url: {pub_key_url}")));
+    }
+
+    // 3. 公钥 PEM：先查缓存，再必要时 HTTP 拉取
+    let pub_key_pem = get_or_fetch_pub_key(&pub_key_url, client, cache).await?;
+    let pub_key_pem_str = String::from_utf8(pub_key_pem)
+        .map_err(|e| bad_request(format!("pub key pem utf8 error: {e}")))?;
+
+    // 4. authorization （签名）Base64 解码
+    let auth_b64 = header_required(&headers, "authorization")?;
+    let auth_bytes = STANDARD
+        .decode(auth_b64.as_bytes())
+        .map_err(|e| bad_request(format!("decode authorization failed: {e}")))?;
+
+    // 5. 组装 sign_str = url_decode(path) [+ query] + '\n' + body
+    let raw_path = uri.path();
+    let decoded_path = percent_decode_str(raw_path)
+        .decode_utf8()
+        .map_err(|e| bad_request(format!("url decode path failed: {e}")))?
+        .into_owned();
+
+    let auth_path = match uri.query() {
+        Some(q) => format!("{}?{}", decoded_path, q),
+        None => decoded_path,
+    };
+
+    let auth_str = format!("{}\n{}", auth_path, body_str);
+
+    // 6. MD5(auth_str)
+    let mut hasher = Md5::new();
+    hasher.update(auth_str.as_bytes());
+    let digest = hasher.finalize();
+
+    // 7. RSA(PKCS#1 v1.5, MD5) 验签
+    let rsa_pub_key = RsaPublicKey::from_public_key_pem(&pub_key_pem_str)
+        .map_err(|e| bad_request(format!("parse public key failed: {e}")))?;
+
+    let verifying_key = pkcs1v15::VerifyingKey::<Md5>::new(rsa_pub_key);
+    let signature = pkcs1v15::Signature::try_from(auth_bytes.as_slice())
+        .map_err(|e| bad_request(format!("invalid signature bytes: {e}")))?;
+
+    verifying_key
+        .verify_prehash(&digest, &signature)
+        .map_err(|_| bad_request("signature verify failed".to_string()))?;
+
+    // 8. 验签通过：重建 Request，把 body 塞回去，并在 extensions 里挂一份解析好的 body
+    let mut new_req = Request::from_parts(parts, Body::from(body_bytes));
+    new_req
+        .extensions_mut()
+        .insert(VerifiedOssCallbackBody(body_str));
+
+    Ok(new_req)
+}
+
+/// 取必需 header
+fn header_required(headers: &HeaderMap, name: &str) -> Result<String, Response> {
+    let value = headers
+        .get(name)
+        .ok_or_else(|| bad_request(format!("missing header: {name}")))?;
+
+    value
+        .to_str()
+        .map(|s| s.to_string())
+        .map_err(|e| bad_request(format!("header {name} utf8 error: {e}")))
+}
+
+/// 按“公钥 URL -> PEM”缓存
+async fn get_or_fetch_pub_key(
+    url: &str,
+    client: &reqwest::Client,
+    cache: &Arc<RwLock<HashMap<String, Vec<u8>>>>,
+) -> Result<Vec<u8>, Response> {
+    // 先查缓存
+    {
+        let cache_read = cache.read().unwrap();
+        if let Some(v) = cache_read.get(url) {
+            return Ok(v.clone());
+        }
+    }
+
+    // 缓存未命中，走 HTTP
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| bad_request(format!("fetch pub key failed: {e}")))?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| bad_request(format!("read pub key body failed: {e}")))?;
+
+    // 写回缓存
+    {
+        let mut cache_write = cache.write().unwrap();
+        cache_write.insert(url.to_string(), bytes.to_vec());
+    }
+
+    Ok(bytes.to_vec())
+}
+
+/// 构造统一的 400 响应
+fn bad_request(msg: String) -> Response {
+    // 可以按需改成只返回固定文案，避免暴露内部错误
+    let body = format!(r#"{{"error":"{}"}}"#, msg);
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .header("Content-Type", "application/json")
+        .body(Body::from(body))
+        .unwrap()
+}
