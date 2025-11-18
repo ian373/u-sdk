@@ -85,12 +85,82 @@ impl IntoResponse for OssVerifyError<'_> {
     }
 }
 
-// 用于在 extensions 里挂载已验证的 OSS 回调体（可选）
-// TODO 感觉可以传入一个T:Serialize，然后这里直接反序列化成T
+/// 验证成功后，存放oss发过来的body数据，为application/json或application/x-www-form-urlencoded(具体视调用callback api时的设置而定)
+/// 在axum中可以把它写为一个extractor，方便handler直接使用。下面给一个构建提取json的例子：
+/// ```rust,no_run
+/// use axum::{
+///     extract::FromRequestParts,
+///     http::{StatusCode, request::Parts},
+///     response::{IntoResponse, Response},
+/// };
+/// use serde::de::DeserializeOwned;
+///
+/// #[derive(Debug, Clone)]
+/// pub struct VerifiedOssCallbackBody(pub String);
+///
+/// #[derive(Debug)]
+/// pub struct VerifiedOssJson<T>(pub T);
+///
+/// impl<S, T> FromRequestParts<S> for VerifiedOssJson<T>
+/// where
+///     S: Send + Sync,
+///     T: DeserializeOwned,
+/// {
+///     type Rejection = Response;
+///
+///     async fn from_request_parts(
+///         parts: &mut Parts,
+///         _state: &S,
+///     ) -> Result<Self, Self::Rejection> {
+///         // 1. 从 extensions 里拿到之前中间件塞进去的 VerifiedOssCallbackBody
+///         let ext = parts
+///             .extensions
+///             .get::<VerifiedOssCallbackBody>()
+///             .ok_or_else(|| {
+///                 (
+///                     StatusCode::INTERNAL_SERVER_ERROR,
+///                     "VerifiedOssCallbackBody missing",
+///                 )
+///                     .into_response()
+///             })?;
+///
+///         // 2. 把里面的 String 按 JSON 解析成 T
+///         let value = serde_json::from_str::<T>(&ext.0).map_err(|e| {
+///             (
+///                 StatusCode::BAD_REQUEST,
+///                 format!("invalid oss callback json: {e}"),
+///             )
+///                 .into_response()
+///         })?;
+///
+///         Ok(VerifiedOssJson(value))
+///     }
+/// }
+///
+/// // 然后在handler里就可以直接用VerifiedOssJson<T>来接收解析后的数据：
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize, Debug)]
+/// struct OssCallbackPayload {
+///     // 按你的业务字段来
+///     pub user_id: String,
+///     pub filename: String,
+///     pub size: u64,
+/// }
+///
+/// // 使用 VerifiedOssJson 提取器：
+/// async fn oss_callback(
+///     VerifiedOssJson(payload): VerifiedOssJson<OssCallbackPayload>,
+/// ) -> impl IntoResponse {
+///     dbg!(&payload);
+///     "ok"
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct VerifiedOssCallbackBody(pub String);
 
 /// 只支持 tokio + axum
+/// 验证成功会把oss发过来的body以String形式放在extensions里：[VerifiedOssCallbackBody]
 #[derive(Clone)]
 pub struct OssCallbackVerifyLayer {
     client: reqwest::Client,
