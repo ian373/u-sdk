@@ -14,6 +14,77 @@ use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
+#[derive(Debug, thiserror::Error)]
+enum OssVerifyError<'a> {
+    #[error("missing required header `{0}`")]
+    MissingHeader(&'a str),
+
+    #[error("invalid header `{0}`")]
+    InvalidHeader(&'a str),
+
+    #[error("invalid oss callback signature")]
+    InvalidSignature,
+
+    #[error("failed to read request body: {0}")]
+    BodyRead(#[from] axum::Error),
+
+    #[error("http error when verifying oss public key: {0}")]
+    Http(#[from] reqwest::Error),
+
+    #[error("base64 decode error: {0}")]
+    Base64(#[from] base64::DecodeError),
+
+    #[error("utf-8 error: {0}")]
+    Utf8(#[from] std::string::FromUtf8Error),
+
+    #[error("error: {0}")]
+    Common(&'a str),
+}
+
+impl IntoResponse for OssVerifyError<'_> {
+    fn into_response(self) -> Response {
+        match self {
+            OssVerifyError::MissingHeader(name) => (
+                StatusCode::BAD_REQUEST,
+                format!("missing required header `{name}`"),
+            )
+                .into_response(),
+
+            OssVerifyError::InvalidHeader(name) => {
+                (StatusCode::BAD_REQUEST, format!("invalid header `{name}`")).into_response()
+            }
+
+            OssVerifyError::InvalidSignature => {
+                (StatusCode::BAD_REQUEST, "invalid oss callback signature").into_response()
+            }
+
+            OssVerifyError::BodyRead(e) => (
+                StatusCode::BAD_REQUEST,
+                format!("failed to read request body: {e}"),
+            )
+                .into_response(),
+
+            OssVerifyError::Http(e) => (
+                StatusCode::BAD_GATEWAY,
+                format!("http error when verifying oss public key: {e}"),
+            )
+                .into_response(),
+
+            OssVerifyError::Base64(e) => {
+                (StatusCode::BAD_REQUEST, format!("base64 decode error: {e}")).into_response()
+            }
+
+            OssVerifyError::Utf8(e) => {
+                (StatusCode::BAD_REQUEST, format!("utf-8 error: {e}")).into_response()
+            }
+
+            OssVerifyError::Common(msg) => {
+                (StatusCode::BAD_REQUEST, format!("error: {msg}")).into_response()
+            }
+        }
+    }
+}
+
 // 用于在 extensions 里挂载已验证的 OSS 回调体（可选）
 // TODO 感觉可以传入一个T:Serialize，然后这里直接反序列化成T
 #[derive(Debug, Clone)]
@@ -75,7 +146,11 @@ pub struct OssCallbackVerifyService<S> {
 impl<S> Service<Request<Body>> for OssCallbackVerifyService<S>
 where
     // 这里要求S: Clone是因为我们在call里需要clone它
+    // S 必须是一个处理 HTTP 请求的 Service，返回的是 axum 的 Response，
+    // 这样这个中间件才能挂在 axum 的 Router / 其它 HTTP 中间件前后
     S: Service<Request<Body>, Response = Response> + Clone + Send + 'static,
+    // 不强制 S::Error 是具体什么类型，但要求它能转换成 axum::BoxError，
+    // 方便和 axum/tower 生态里那些统一用 BoxError 的通用组件（如 HandleErrorLayer）组合
     S::Error: Into<axum::BoxError>,
     // 这个必须要否则会在call返回的Future里报错，如果没有这个，即使你返回的Future是Send的，编译器也会报错
     // axum文档中的例子也有：https://docs.rs/axum/latest/axum/middleware/index.html#towerservice-and-pinboxdyn-future
@@ -112,52 +187,43 @@ where
 /// OSS 验签逻辑：
 /// - 成功：返回新的 Request（body 已重建，且 extensions 里挂了 VerifiedOssCallbackBody）
 /// - 失败：返回一个 400 Response
-async fn verify_oss_request(
+async fn verify_oss_request<'a>(
     req: Request<Body>,
     client: &reqwest::Client,
     cache: &Arc<RwLock<HashMap<String, Vec<u8>>>>,
-) -> Result<Request<Body>, Response> {
+) -> Result<Request<Body>, OssVerifyError<'a>> {
     let (parts, body) = req.into_parts();
     let headers = parts.headers.clone();
     let uri = parts.uri.clone();
 
     // 1. 读 body
-    let body_bytes = to_bytes(body, usize::MAX)
-        .await
-        .map_err(|e| bad_request(format!("read body failed: {e}")))?;
-    let body_str = String::from_utf8(body_bytes.to_vec())
-        .map_err(|e| bad_request(format!("body utf8 error: {e}")))?;
+    let body_bytes = to_bytes(body, usize::MAX).await?;
+    let body_str = String::from_utf8(body_bytes.to_vec())?;
 
     // 2. 拿 x-oss-pub-key-url 并解码
     let pub_key_url_b64 = header_required(&headers, "x-oss-pub-key-url")?;
-    let pub_key_url_raw = STANDARD
-        .decode(pub_key_url_b64.as_bytes())
-        .map_err(|e| bad_request(format!("decode x-oss-pub-key-url failed: {e}")))?;
-    let pub_key_url = String::from_utf8(pub_key_url_raw)
-        .map_err(|e| bad_request(format!("x-oss-pub-key-url utf8 error: {e}")))?;
+    let pub_key_url_raw = STANDARD.decode(pub_key_url_b64.as_bytes())?;
+    let pub_key_url = String::from_utf8(pub_key_url_raw)?;
 
     if !pub_key_url.starts_with("http://gosspublic.alicdn.com/")
         && !pub_key_url.starts_with("https://gosspublic.alicdn.com/")
     {
-        return Err(bad_request(format!("invalid pub key url: {pub_key_url}")));
+        return Err(OssVerifyError::Common("invalid oss public key url"));
     }
 
     // 3. 公钥 PEM：先查缓存，再必要时 HTTP 拉取
     let pub_key_pem = get_or_fetch_pub_key(&pub_key_url, client, cache).await?;
-    let pub_key_pem_str = String::from_utf8(pub_key_pem)
-        .map_err(|e| bad_request(format!("pub key pem utf8 error: {e}")))?;
+    let pub_key_pem_str = String::from_utf8(pub_key_pem)?;
 
     // 4. authorization （签名）Base64 解码
     let auth_b64 = header_required(&headers, "authorization")?;
-    let auth_bytes = STANDARD
-        .decode(auth_b64.as_bytes())
-        .map_err(|e| bad_request(format!("decode authorization failed: {e}")))?;
+    let auth_bytes = STANDARD.decode(auth_b64.as_bytes())?;
 
     // 5. 组装 sign_str = url_decode(path) [+ query] + '\n' + body
     let raw_path = uri.path();
     let decoded_path = percent_decode_str(raw_path)
         .decode_utf8()
-        .map_err(|e| bad_request(format!("url decode path failed: {e}")))?
+        .map_err(|_| OssVerifyError::Common("failed to percent-decode uri path"))?
         .into_owned();
 
     let auth_path = match uri.query() {
@@ -174,15 +240,15 @@ async fn verify_oss_request(
 
     // 7. RSA(PKCS#1 v1.5, MD5) 验签
     let rsa_pub_key = RsaPublicKey::from_public_key_pem(&pub_key_pem_str)
-        .map_err(|e| bad_request(format!("parse public key failed: {e}")))?;
+        .map_err(|_| OssVerifyError::Common("failed to parse oss public key pem"))?;
 
     let verifying_key = pkcs1v15::VerifyingKey::<Md5>::new(rsa_pub_key);
     let signature = pkcs1v15::Signature::try_from(auth_bytes.as_slice())
-        .map_err(|e| bad_request(format!("invalid signature bytes: {e}")))?;
+        .map_err(|_| OssVerifyError::Common("failed to parse oss signature"))?;
 
     verifying_key
         .verify_prehash(&digest, &signature)
-        .map_err(|_| bad_request("signature verify failed".to_string()))?;
+        .map_err(|_| OssVerifyError::InvalidSignature)?;
 
     // 8. 验签通过：重建 Request，把 body 塞回去，并在 extensions 里挂一份解析好的 body
     let mut new_req = Request::from_parts(parts, Body::from(body_bytes));
@@ -194,23 +260,23 @@ async fn verify_oss_request(
 }
 
 /// 取必需 header
-fn header_required(headers: &HeaderMap, name: &str) -> Result<String, Response> {
+fn header_required<'a>(headers: &HeaderMap, name: &'a str) -> Result<String, OssVerifyError<'a>> {
     let value = headers
         .get(name)
-        .ok_or_else(|| bad_request(format!("missing header: {name}")))?;
+        .ok_or(OssVerifyError::MissingHeader(name))?;
 
-    value
+    let s = value
         .to_str()
-        .map(|s| s.to_string())
-        .map_err(|e| bad_request(format!("header {name} utf8 error: {e}")))
+        .map_err(|_| OssVerifyError::InvalidHeader(name))?;
+    Ok(s.to_owned())
 }
 
 /// 按“公钥 URL -> PEM”缓存
-async fn get_or_fetch_pub_key(
+async fn get_or_fetch_pub_key<'a>(
     url: &str,
     client: &reqwest::Client,
     cache: &Arc<RwLock<HashMap<String, Vec<u8>>>>,
-) -> Result<Vec<u8>, Response> {
+) -> Result<Vec<u8>, OssVerifyError<'a>> {
     // 先查缓存
     {
         let cache_read = cache.read().unwrap();
@@ -220,15 +286,8 @@ async fn get_or_fetch_pub_key(
     }
 
     // 缓存未命中，走 HTTP
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| bad_request(format!("fetch pub key failed: {e}")))?;
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| bad_request(format!("read pub key body failed: {e}")))?;
+    let resp = client.get(url).send().await?;
+    let bytes = resp.bytes().await?;
 
     // 写回缓存
     {
@@ -237,15 +296,4 @@ async fn get_or_fetch_pub_key(
     }
 
     Ok(bytes.to_vec())
-}
-
-/// 构造统一的 400 响应
-fn bad_request(msg: String) -> Response {
-    // 可以按需改成只返回固定文案，避免暴露内部错误
-    let body = format!(r#"{{"error":"{}"}}"#, msg);
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .header("Content-Type", "application/json")
-        .body(Body::from(body))
-        .unwrap()
 }
