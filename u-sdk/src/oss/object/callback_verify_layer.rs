@@ -85,7 +85,10 @@ impl IntoResponse for OssVerifyError<'_> {
     }
 }
 
-/// 验证成功后，存放oss发过来的body数据，为application/json或application/x-www-form-urlencoded(具体视调用callback api时的设置而定)
+/// OSS回调验证成功后的Body的数据
+///
+/// 验证成功后，存放oss发过来的body数据，为application/json或application/x-www-form-urlencoded(具体视调用callback api时的设置而定)。
+///
 /// 在axum中可以把它写为一个extractor，方便handler直接使用。下面给一个构建提取json的例子：
 /// ```rust,no_run
 /// use axum::{
@@ -204,7 +207,7 @@ impl<S> Layer<S> for OssCallbackVerifyLayer {
     }
 }
 
-/// 真正的 Service，实现 OSS 验签逻辑
+/// OssCallbackVerifyLayer对应的Service实现
 #[derive(Clone)]
 pub struct OssCallbackVerifyService<S> {
     inner: S,
