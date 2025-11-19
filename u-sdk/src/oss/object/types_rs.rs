@@ -895,14 +895,29 @@ impl CallBackBody {
 
     /// 生成 JSON 形式：{"bucket": "${bucket}", ...}
     pub(crate) fn to_serialized_json_string(&self) -> String {
-        use serde_json::Map;
+        let mut s = String::new();
+        let mut first = true;
+        s.push('{');
 
-        let mut obj = Map::new();
         self.visit_fields(|k, v| {
-            obj.insert(k.to_owned(), Value::String(v));
+            if !first {
+                s.push(',');
+            } else {
+                first = false;
+            }
+
+            // 写 key 部分："bucket":
+            s.push('"');
+            s.push_str(k); // 如果 key 里不会有特殊字符，这样就够了
+            s.push('"');
+            s.push(':');
+
+            // 写 value 部分，直接拼占位符，例如 ${bucket}
+            s.push_str(&v);
         });
 
-        serde_json::to_string(&obj).unwrap()
+        s.push('}');
+        s
     }
 }
 // endregion

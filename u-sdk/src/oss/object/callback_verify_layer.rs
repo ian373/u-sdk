@@ -4,7 +4,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use md5::{Digest, Md5};
-use percent_encoding::percent_decode_str;
+// use percent_encoding::percent_decode_str;
 use rsa::pkcs8::DecodePublicKey;
 use rsa::signature::hazmat::PrehashVerifier;
 use rsa::{RsaPublicKey, pkcs1v15};
@@ -169,14 +169,17 @@ pub struct OssCallbackVerifyLayer {
     client: reqwest::Client,
     // 这里用 Arc 包一层，便于不同 Service 共享缓存
     cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    // TODO 因为目前配置的nginx/axum会把url路径给剥离掉，所以先用这个字段让用户自己填上回调路径
+    callback_path: String,
 }
 
 impl OssCallbackVerifyLayer {
-    pub fn new() -> Self {
+    pub fn new(path: &str) -> Self {
         Self {
             client: reqwest::Client::new(),
             // 也可以直接用自己的 HashMap，这里示范复用全局缓存
             cache: Arc::new(RwLock::new(HashMap::new())),
+            callback_path: path.to_owned(),
         }
     }
 
@@ -189,12 +192,6 @@ impl OssCallbackVerifyLayer {
     // }
 }
 
-impl Default for OssCallbackVerifyLayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<S> Layer<S> for OssCallbackVerifyLayer {
     type Service = OssCallbackVerifyService<S>;
 
@@ -203,6 +200,7 @@ impl<S> Layer<S> for OssCallbackVerifyLayer {
             inner,
             client: self.client.clone(),
             cache: Arc::clone(&self.cache),
+            callback_path: self.callback_path.clone(),
         }
     }
 }
@@ -213,6 +211,7 @@ pub struct OssCallbackVerifyService<S> {
     inner: S,
     client: reqwest::Client,
     cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    callback_path: String,
 }
 
 // 构建Service的过程tower有一个guide: https://github.com/tower-rs/tower/blob/master/guides/building-a-middleware-from-scratch.md
@@ -245,10 +244,11 @@ where
         let mut inner = std::mem::replace(&mut self.inner, clone);
         let client = self.client.clone();
         let cache = Arc::clone(&self.cache);
+        let callback_path = self.callback_path.clone();
 
         Box::pin(async move {
             // 先做 OSS 验签，如果失败，直接返回 400 Response
-            match verify_oss_request(req, &client, &cache).await {
+            match verify_oss_request(req, &client, &cache, callback_path).await {
                 // 这里我们需要把inner clone出来，不能直接用self.inner，否则此时返回的Future的生命周期就不是'static了，而是和self绑定在一起了
                 Ok(verified_req) => inner.call(verified_req).await,
                 Err(resp) => Ok(resp.into_response()),
@@ -264,6 +264,7 @@ async fn verify_oss_request<'a>(
     req: Request<Body>,
     client: &reqwest::Client,
     cache: &Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    callback_path: String,
 ) -> Result<Request<Body>, OssVerifyError<'a>> {
     let (parts, body) = req.into_parts();
     let headers = parts.headers.clone();
@@ -293,11 +294,12 @@ async fn verify_oss_request<'a>(
     let auth_bytes = STANDARD.decode(auth_b64.as_bytes())?;
 
     // 5. 组装 sign_str = url_decode(path) [+ query] + '\n' + body
-    let raw_path = uri.path();
-    let decoded_path = percent_decode_str(raw_path)
-        .decode_utf8()
-        .map_err(|_| OssVerifyError::Common("failed to percent-decode uri path"))?
-        .into_owned();
+    // let raw_path = uri.path();
+    // let decoded_path = percent_decode_str(raw_path)
+    //     .decode_utf8()
+    //     .map_err(|_| OssVerifyError::Common("failed to percent-decode uri path"))?
+    //     .into_owned();
+    let decoded_path = callback_path;
 
     let auth_path = match uri.query() {
         Some(q) => format!("{}?{}", decoded_path, q),
