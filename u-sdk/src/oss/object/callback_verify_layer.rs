@@ -174,12 +174,20 @@ pub struct OssCallbackVerifyLayer {
 }
 
 impl OssCallbackVerifyLayer {
-    pub fn new(path: &str) -> Self {
+    /// callback_url_path: 在设置`callbackUrl`时的路径部分
+    ///
+    /// 因为如果应用部署在代理如nginx后面，nginx可能会配置把路径前缀剥离掉；
+    /// 或者axum如果是嵌套路由，那么在layer的service里看到的uri.path()也不是完整路径，
+    /// 此时需要使用（如果路径没有被nginx等剥离）[axum::extract::OriginalUri]来获取完整路径。
+    /// 为了简化起见，这里直接让用户传入callbackUrl里的路径部分
+    ///
+    /// 注意：传入的是没有经过url encode的原始路径
+    pub fn new(callback_url_path: &str) -> Self {
         Self {
             client: reqwest::Client::new(),
             // 也可以直接用自己的 HashMap，这里示范复用全局缓存
             cache: Arc::new(RwLock::new(HashMap::new())),
-            callback_path: path.to_owned(),
+            callback_path: callback_url_path.to_owned(),
         }
     }
 
