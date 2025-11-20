@@ -53,6 +53,7 @@ pub struct PutObject<'a> {
     // x-oss-meta-*  将由custom_metas转换为`x-oss-meta-key: value`形式添加
     x_oss_tagging: Option<&'a str>,
     // endregion
+
     // callback
     #[serde(skip_serializing)]
     pub(crate) callback: Option<OssCallBack>,
