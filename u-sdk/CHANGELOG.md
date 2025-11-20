@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 添加`PostObject`获取签名信息的方法
 - 添加`PutObject`的callback的功能
 - 添加`PostObject`获取签名信息时携带callback的功能
+- 添加`PutObject`生成预签名时携带callback的功能
 
 ### Fixed
 

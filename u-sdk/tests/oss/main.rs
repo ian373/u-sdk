@@ -189,14 +189,38 @@ async fn put_object_test() {
 #[ignore]
 fn put_object_presigned_url_test() {
     let client = get_oss_client();
+    let callback_body = CallBackBody::builder()
+        .bucket(true)
+        .object(true)
+        .vars([("uid", "uid", "1234"), ("order", "order_id", "1234")])
+        .build();
+    let callback = OssCallBack::builder()
+        .callback_url(["https://example.com/webhook/oss/callback"])
+        .callback_body(callback_body)
+        .callback_sni(false)
+        .callback_body_type(CallbackBodyType::Json)
+        .build();
     let res = client
         .put_object()
         .content_type("text/plain")
-        .cache_control("max-age=6666")
+        // .cache_control("max-age=6666")
         .x_meta("key", "value")
         .x_metas([("key3", "value3"), ("key4", "value4")])
+        .callback(callback)
         .build()
         .generate_presigned_url("test/k-sample.toml", 300);
+    /*
+    在客户端使用生成的Presigned URL进行 PUT 请求时，
+    请求的header中需要包含构建PutObject设置的那些header以及对应的值，如上面的例子中需要指定
+    Content-Type: text/plain
+    Cache-Control: max-age=6666
+    x-oss-meta-key: value
+    x-oss-meta-key3: value3
+    x-oss-meta-key4: value4
+    然后body中放置Binary[单个文件]
+
+    客户端请求的时候header只能包含在构建PutObject中设置的那些header，不能包含其他header，否则会导致签名验证失败。
+     */
     println!("res: {:#?}", res);
 }
 
