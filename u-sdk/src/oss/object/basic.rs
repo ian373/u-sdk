@@ -190,6 +190,25 @@ impl PostObject<'_> {
             "{}/{}/{}/oss/aliyun_v4_request",
             client.access_key_id, date, client.region
         );
+
+        // 处理callback相关
+        let mut callback_b64 = None;
+        let mut callback_var = None;
+        if let Some(oss_callback) = &self.callback {
+            callback_b64 = Some(
+                general_purpose::STANDARD.encode(serde_json::to_string(oss_callback).unwrap()),
+            );
+            if !oss_callback.callback_body.callback_var.is_empty() {
+                let callback_var_map = oss_callback
+                    .callback_body
+                    .callback_var
+                    .iter()
+                    .map(|(_, k, v)| (k.clone(), v.clone()))
+                    .collect::<HashMap<_, _>>();
+                callback_var = Some(callback_var_map);
+            }
+        }
+
         let policy = PostPolicy {
             expiration: policy_expiration,
             conditions: PostPolicyCondition {
@@ -214,6 +233,8 @@ impl PostObject<'_> {
                 x_oss_storage_class: self.x_oss_storage_class,
                 success_action_redirect: self.success_action_redirect,
                 custom_metas: self.custom_metas,
+                callback_b64: callback_b64.as_deref(),
+                callback_var: callback_var.as_ref(),
             },
         };
         let policy_str = serde_json::to_string(&policy).unwrap();
@@ -233,6 +254,8 @@ impl PostObject<'_> {
             signature,
             date_time,
             credential,
+            callback_b64,
+            callback_var,
         })
     }
 }

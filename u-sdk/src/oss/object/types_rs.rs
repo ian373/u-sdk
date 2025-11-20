@@ -136,6 +136,9 @@ pub struct PostObject<'a> {
     pub(crate) success_action_redirect: Option<(String, String)>,
     // x-oss-meta-*，由于bon的顺序要求放到了前面
     // file
+
+    // callback: https://help.aliyun.com/zh/oss/developer-reference/callback
+    pub(crate) callback: Option<OssCallBack>,
 }
 
 impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
@@ -170,14 +173,17 @@ impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
 }
 
 #[derive(Serialize)]
-pub(crate) struct PostPolicy {
+pub(crate) struct PostPolicy<'a> {
     pub expiration: String,
     #[serde(serialize_with = "serialize_conditions")]
-    pub conditions: PostPolicyCondition,
+    pub conditions: PostPolicyCondition<'a>,
 }
 
-/// 不用担心转义问题，serde_json会自动处理
-pub(crate) struct PostPolicyCondition {
+// 不用担心转义问题，serde_json会自动处理
+// 通过[PostObject]的builder收集所有数据，包括POST API的表单元素，POST V4签名所需的表单元素，callback参数
+// 然后序列化为policy conditions。通过这样，就可以强制要求前端上传时必须携带这些字段，并且符合要求
+// 如果不全部集中到这里来做限制，前端可以随意填写表单域，导致上传不符合要求
+pub(crate) struct PostPolicyCondition<'a> {
     // POST v4签名表单元素（字段）
     pub(crate) bucket: Option<String>,
     // 固定为`OSS4-HMAC-SHA256`，自动添加
@@ -204,6 +210,10 @@ pub(crate) struct PostPolicyCondition {
     pub(crate) x_oss_storage_class: Option<String>,
     pub(crate) success_action_redirect: Option<(String, String)>,
     pub(crate) custom_metas: HashMap<String, (String, String)>,
+
+    // callback
+    pub(crate) callback_b64: Option<&'a str>,
+    pub(crate) callback_var: Option<&'a HashMap<String, String>>,
 }
 
 /*
@@ -342,6 +352,17 @@ fn conditions_to_json_array(cond: &PostPolicyCondition) -> Vec<Value> {
         }
     }
 
+    // callback处理
+    if let Some(s) = &cond.callback_b64 {
+        arr.push(json!(["eq", "$callback", s]));
+    }
+
+    if let Some(vars) = cond.callback_var {
+        for (var_key, var_value) in vars {
+            arr.push(json!(["eq", format!("${}", var_key), var_value]));
+        }
+    }
+
     arr
 }
 
@@ -360,6 +381,8 @@ pub struct GeneratePolicyResult {
     pub signature: String,
     pub credential: String,
     pub date_time: String,
+    pub callback_b64: Option<String>,
+    pub callback_var: Option<HashMap<String, String>>,
 }
 
 // endregion
