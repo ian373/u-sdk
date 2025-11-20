@@ -362,6 +362,11 @@ fn get_object_presigned_url_test() {
         .build()
         .generate_presigned_url("test/t-sample.toml", 300);
     println!("res: {:#?}", res);
+    /*
+    使用sdk生成的Presigned URL进行 GET 请求时，
+    请求的header中需要包含构建GetObject设置的那些header以及对应的值，否则会导致签名验证失败。
+    对于其它未包含在构建GetObject中的header，如果前端请求的时候自己添加了这些header，是不会影响签名验证的，但是对请求会起作用。
+     */
 }
 
 #[tokio::test]
