@@ -159,7 +159,7 @@ async fn put_object_test() {
         .vars([("uid", "uid", "1234"), ("order", "order_id", "1234")])
         .build();
     let callback = OssCallBack::builder()
-        .callback_url(["https://webhook.site/ff5086fe-20db-43d3-803a-b6955c139f88"])
+        .callback_url(["https://webhook.site/53a2f961-b96f-4ede-b662-5d941eec536e"])
         .callback_body(callback_body)
         .callback_sni(false)
         .callback_body_type(CallbackBodyType::Json)
@@ -203,7 +203,7 @@ fn put_object_presigned_url_test() {
     let res = client
         .put_object()
         .content_type("text/plain")
-        // .cache_control("max-age=6666")
+        .cache_control("max-age=6666")
         .x_meta("key", "value")
         .x_metas([("key3", "value3"), ("key4", "value4")])
         .callback(callback)

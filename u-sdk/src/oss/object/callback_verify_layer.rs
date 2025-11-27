@@ -279,7 +279,7 @@ async fn verify_oss_request<'a>(
     let uri = parts.uri.clone();
 
     // 1. 读 body
-    let body_bytes = to_bytes(body, usize::MAX).await?;
+    let body_bytes = to_bytes(body, 5 * 1024 * 1024).await?;
     let body_str = String::from_utf8(body_bytes.to_vec())?;
 
     // 2. 拿 x-oss-pub-key-url 并解码
@@ -302,6 +302,8 @@ async fn verify_oss_request<'a>(
     let auth_bytes = STANDARD.decode(auth_b64.as_bytes())?;
 
     // 5. 组装 sign_str = url_decode(path) [+ query] + '\n' + body
+    // 下面的注释代码先保留，这是最初的实现方式，但是由于部署时可能会有nginx等代理剥离路径前缀的问题，
+    // 所以改成直接用用户传入的callback_path
     // let raw_path = uri.path();
     // let decoded_path = percent_decode_str(raw_path)
     //     .decode_utf8()
@@ -360,6 +362,8 @@ async fn get_or_fetch_pub_key<'a>(
     client: &reqwest::Client,
     cache: &Arc<RwLock<HashMap<String, Vec<u8>>>>,
 ) -> Result<Vec<u8>, OssVerifyError<'a>> {
+    // 这个方法的代码有个问题：在并发场景下，如果url未命中缓存，会对同一个url发起多次HTTP请求
+
     // 先查缓存
     {
         let cache_read = cache.read().unwrap();
@@ -375,7 +379,12 @@ async fn get_or_fetch_pub_key<'a>(
     // 写回缓存
     {
         let mut cache_write = cache.write().unwrap();
-        cache_write.insert(url.to_string(), bytes.to_vec());
+        if let Some(v) = cache_write.get(url) {
+            // Another thread inserted it while we were fetching; use theirs.
+            return Ok(v.clone());
+        } else {
+            cache_write.insert(url.to_string(), bytes.to_vec());
+        }
     }
 
     Ok(bytes.to_vec())

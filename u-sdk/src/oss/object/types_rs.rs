@@ -917,7 +917,7 @@ impl CallBackBody {
         body_list.join("&")
     }
 
-    /// 生成 JSON 形式：{"bucket": "${bucket}", ...}
+    /// 生成类似于JSON形式：{"bucket": ${bucket}, ...};注意：这里的value部分没有加引号，是占位符形式，例如：${bucket}
     pub(crate) fn to_serialized_json_string(&self) -> String {
         let mut s = String::new();
         let mut first = true;
@@ -930,9 +930,11 @@ impl CallBackBody {
                 first = false;
             }
 
-            // 写 key 部分："bucket":
+            // 文档里没有说构建时处理转义json的问题，所以这里直接拼接字符串
+
+            // 写 key 部分：`"bucket":`
             s.push('"');
-            s.push_str(k); // 如果 key 里不会有特殊字符，这样就够了
+            s.push_str(k);
             s.push('"');
             s.push(':');
 
@@ -941,6 +943,9 @@ impl CallBackBody {
         });
 
         s.push('}');
+
+        // println!("callback body string: {}", s);
+
         s
     }
 }
