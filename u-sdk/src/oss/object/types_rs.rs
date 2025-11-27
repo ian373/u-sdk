@@ -53,6 +53,7 @@ pub struct PutObject<'a> {
     // x-oss-meta-*  将由custom_metas转换为`x-oss-meta-key: value`形式添加
     x_oss_tagging: Option<&'a str>,
     // endregion
+
     // callback
     #[serde(skip_serializing)]
     pub(crate) callback: Option<OssCallBack>,
@@ -136,6 +137,9 @@ pub struct PostObject<'a> {
     pub(crate) success_action_redirect: Option<(String, String)>,
     // x-oss-meta-*，由于bon的顺序要求放到了前面
     // file
+
+    // callback: https://help.aliyun.com/zh/oss/developer-reference/callback
+    pub(crate) callback: Option<OssCallBack>,
 }
 
 impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
@@ -170,14 +174,17 @@ impl<'a, S: post_object_builder::State> PostObjectBuilder<'a, S> {
 }
 
 #[derive(Serialize)]
-pub(crate) struct PostPolicy {
+pub(crate) struct PostPolicy<'a> {
     pub expiration: String,
     #[serde(serialize_with = "serialize_conditions")]
-    pub conditions: PostPolicyCondition,
+    pub conditions: PostPolicyCondition<'a>,
 }
 
-/// 不用担心转义问题，serde_json会自动处理
-pub(crate) struct PostPolicyCondition {
+// 不用担心转义问题，serde_json会自动处理
+// 通过[PostObject]的builder收集所有数据，包括POST API的表单元素，POST V4签名所需的表单元素，callback参数
+// 然后序列化为policy conditions。通过这样，就可以强制要求前端上传时必须携带这些字段，并且符合要求
+// 如果不全部集中到这里来做限制，前端可以随意填写表单域，导致上传不符合要求
+pub(crate) struct PostPolicyCondition<'a> {
     // POST v4签名表单元素（字段）
     pub(crate) bucket: Option<String>,
     // 固定为`OSS4-HMAC-SHA256`，自动添加
@@ -204,6 +211,10 @@ pub(crate) struct PostPolicyCondition {
     pub(crate) x_oss_storage_class: Option<String>,
     pub(crate) success_action_redirect: Option<(String, String)>,
     pub(crate) custom_metas: HashMap<String, (String, String)>,
+
+    // callback
+    pub(crate) callback_b64: Option<&'a str>,
+    pub(crate) callback_var: Option<&'a HashMap<String, String>>,
 }
 
 /*
@@ -342,6 +353,17 @@ fn conditions_to_json_array(cond: &PostPolicyCondition) -> Vec<Value> {
         }
     }
 
+    // callback处理
+    if let Some(s) = &cond.callback_b64 {
+        arr.push(json!(["eq", "$callback", s]));
+    }
+
+    if let Some(vars) = cond.callback_var {
+        for (var_key, var_value) in vars {
+            arr.push(json!(["eq", format!("${}", var_key), var_value]));
+        }
+    }
+
     arr
 }
 
@@ -360,6 +382,8 @@ pub struct GeneratePolicyResult {
     pub signature: String,
     pub credential: String,
     pub date_time: String,
+    pub callback_b64: Option<String>,
+    pub callback_var: Option<HashMap<String, String>>,
 }
 
 // endregion
@@ -767,7 +791,7 @@ pub struct CallBackBody {
     // callback-var
     #[builder(field)]
     // 表示形式: (callbackBody中的key, callback-var中的key, value)，最终会组成:
-    // callbackBody: "key=${x:var_key}", callback-var: {"var_key": "value"}
+    // callbackBody: "key=${x:var_key}", callback-var: {"x:var_key": "value"}
     pub(crate) callback_var: Vec<(String, String, String)>,
     // callbackBody支持的系统参数
     #[builder(default)]
@@ -801,11 +825,14 @@ pub struct CallBackBody {
 }
 
 impl<S: call_back_body_builder::State> CallBackBodyBuilder<S> {
+    fn var_key_string(var_key: &str) -> String {
+        format!("x:{}", var_key)
+    }
     /// 设置callbackBody中的key，callback-var中的key和callback-var中的value
     pub fn var(mut self, body_key: &str, var_key: &str, var_value: &str) -> Self {
         self.callback_var.push((
             body_key.to_owned(),
-            var_key.to_owned(),
+            Self::var_key_string(var_key),
             var_value.to_owned(),
         ));
         self
@@ -816,7 +843,7 @@ impl<S: call_back_body_builder::State> CallBackBodyBuilder<S> {
         for (body_key, var_key, var_value) in vars {
             self.callback_var.push((
                 body_key.to_owned(),
-                var_key.to_owned(),
+                Self::var_key_string(var_key),
                 var_value.to_owned(),
             ));
         }
@@ -875,7 +902,7 @@ impl CallBackBody {
 
         for (k1, k2, _) in &self.callback_var {
             // k1: 自定义 key，k2: 自定义变量名
-            f(k1, format!("${{x:{}}}", k2));
+            f(k1, format!("${{{}}}", k2));
         }
     }
 
@@ -890,16 +917,36 @@ impl CallBackBody {
         body_list.join("&")
     }
 
-    /// 生成 JSON 形式：{"bucket": "${bucket}", ...}
+    /// 生成类似于JSON形式：{"bucket": ${bucket}, ...};注意：这里的value部分没有加引号，是占位符形式，例如：${bucket}
     pub(crate) fn to_serialized_json_string(&self) -> String {
-        use serde_json::Map;
+        let mut s = String::new();
+        let mut first = true;
+        s.push('{');
 
-        let mut obj = Map::new();
         self.visit_fields(|k, v| {
-            obj.insert(k.to_owned(), Value::String(v));
+            if !first {
+                s.push(',');
+            } else {
+                first = false;
+            }
+
+            // 文档里没有说构建时处理转义json的问题，所以这里直接拼接字符串
+
+            // 写 key 部分：`"bucket":`
+            s.push('"');
+            s.push_str(k);
+            s.push('"');
+            s.push(':');
+
+            // 写 value 部分，直接拼占位符，例如 ${bucket}
+            s.push_str(&v);
         });
 
-        serde_json::to_string(&obj).unwrap()
+        s.push('}');
+
+        // println!("callback body string: {}", s);
+
+        s
     }
 }
 // endregion

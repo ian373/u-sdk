@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 添加`GetObject`预签名URL的方法
 - 添加`PutObject`预签名URL的方法
 - 添加`PostObject`获取签名信息的方法
+- 添加`PutObject`的callback的功能
+- 添加`PostObject`获取签名信息时携带callback的功能
+- 添加`PutObject`生成预签名时携带callback的功能
+- 添加oss callback服务器端验证的axum Layer
+
+### Changed
+
+- [oss]
+- 更新和完善了代码/测试/用户的文档说明
 
 ### Fixed
 

@@ -136,22 +136,49 @@ impl<'a> PutObject<'a> {
         })
     }
 
-    /// [OSS不直接提供限制上传文件类型和大小的功能](https://help.aliyun.com/zh/oss/how-do-i-limit-object-formats-and-sizes-when-i-upload-objects-to-oss)
-    ///
     /// 生成用于上传的预签名URL（Presigned URL），生成的url使用PUT方法上传文件
+    ///
+    /// [OSS不直接提供限制上传文件类型和大小的功能](https://help.aliyun.com/zh/oss/how-do-i-limit-object-formats-and-sizes-when-i-upload-objects-to-oss)
     ///
     /// # 参数
     /// - `object_name`：要上传的对象名称。必须遵守 [OSS Object 命名规则](https://help.aliyun.com/zh/oss/user-guide/object-overview#720fde5f0asvg)。
     /// - `expires`：URL 的有效期，单位为秒。过期后将无法使用。
+    ///
+    /// 阿里云oss文档不建议使用预签名URL上传带有回调的对象：
+    /// > 该方式常用于预签名URL上传文件的场景，通过将回调参数Base64编码后拼接在URL中实现自动回调。
+    /// > 但由于回调信息暴露在 URL 中，存在一定的安全风险，仅建议用于临时访问或低敏感场景。[callback签名](https://help.aliyun.com/zh/oss/developer-reference/callback)
     pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
-        let base_url = url::Url::parse(&format!(
+        let mut base_url = url::Url::parse(&format!(
             "https://{}.{}/{}",
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
+
+        // callback处理
+        if let Some(oss_callback) = &self.callback {
+            let callback_base64 =
+                general_purpose::STANDARD.encode(serde_json::to_string(oss_callback).unwrap());
+            base_url
+                .query_pairs_mut()
+                .append_pair("callback", &callback_base64);
+            if !oss_callback.callback_body.callback_var.is_empty() {
+                let callback_var_map = oss_callback
+                    .callback_body
+                    .callback_var
+                    .iter()
+                    .map(|(_, k, v)| (k, v))
+                    .collect::<HashMap<_, _>>();
+                let callback_var_base64 = general_purpose::STANDARD
+                    .encode(serde_json::to_string(&callback_var_map).unwrap());
+                base_url
+                    .query_pairs_mut()
+                    .append_pair("callback-var", &callback_var_base64);
+            }
+        }
+
         let mut header_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         if !self.custom_metas.is_empty() {
@@ -190,6 +217,25 @@ impl PostObject<'_> {
             "{}/{}/{}/oss/aliyun_v4_request",
             client.access_key_id, date, client.region
         );
+
+        // 处理callback相关
+        let mut callback_b64 = None;
+        let mut callback_var = None;
+        if let Some(oss_callback) = &self.callback {
+            callback_b64 = Some(
+                general_purpose::STANDARD.encode(serde_json::to_string(oss_callback).unwrap()),
+            );
+            if !oss_callback.callback_body.callback_var.is_empty() {
+                let callback_var_map = oss_callback
+                    .callback_body
+                    .callback_var
+                    .iter()
+                    .map(|(_, k, v)| (k.clone(), v.clone()))
+                    .collect::<HashMap<_, _>>();
+                callback_var = Some(callback_var_map);
+            }
+        }
+
         let policy = PostPolicy {
             expiration: policy_expiration,
             conditions: PostPolicyCondition {
@@ -214,6 +260,8 @@ impl PostObject<'_> {
                 x_oss_storage_class: self.x_oss_storage_class,
                 success_action_redirect: self.success_action_redirect,
                 custom_metas: self.custom_metas,
+                callback_b64: callback_b64.as_deref(),
+                callback_var: callback_var.as_ref(),
             },
         };
         let policy_str = serde_json::to_string(&policy).unwrap();
@@ -233,6 +281,8 @@ impl PostObject<'_> {
             signature,
             date_time,
             credential,
+            callback_b64,
+            callback_var,
         })
     }
 }
