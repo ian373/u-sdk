@@ -4,7 +4,7 @@ use super::types_rs::*;
 use crate::translate::utils::parse_json_response;
 use std::collections::HashMap;
 use u_sdk_common::helper::into_header_map;
-use u_sdk_common::open_api_sign::{OpenApiStyle, SignParams, get_openapi_request_header};
+use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 
 impl Client {
     /// 机器翻译-通用版和专业版
@@ -34,9 +34,9 @@ impl Translate<'_> {
             query_map: self,
             x_acs_action: "TranslateGeneral",
             x_acs_version: "2018-10-12",
-            x_acs_security_token: None,
+            x_acs_security_token: self.sts_security_token,
             request_body: None,
-            style: OpenApiStyle::RPC,
+            style: &client.style,
         };
         if self.scene != "general" {
             sign_params.x_acs_action = "Translate";
@@ -74,9 +74,9 @@ impl GetDetectLanguage<'_> {
             query_map: &query_map,
             x_acs_action: "GetDetectLanguage",
             x_acs_version: "2018-10-12",
-            x_acs_security_token: None,
+            x_acs_security_token: self.sts_security_token,
             request_body: None,
-            style: OpenApiStyle::RPC,
+            style: &client.style,
         };
 
         let (common_headers, url_) = get_openapi_request_header(

@@ -23,7 +23,7 @@ pub struct SignParams<'a, T: Serialize> {
     pub x_acs_security_token: Option<&'a str>,
 
     // 其它签名的时候需要的信息
-    pub style: OpenApiStyle,
+    pub style: &'a OpenApiStyle,
     pub req_method: &'a str,
     // 这个字段只要是序列化为Value后是Object即可
     pub query_map: T,
@@ -47,7 +47,7 @@ pub enum OpenApiStyle {
 pub fn generate_can_uri(
     host: &str,
     query: &impl Serialize,
-    style: OpenApiStyle,
+    style: &OpenApiStyle,
 ) -> Result<(String, String, String), Error> {
     let query_map = to_query_map(query);
     let u = Url::parse_with_params(&format!("https://{}", host), query_map)
