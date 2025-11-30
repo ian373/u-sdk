@@ -2,12 +2,12 @@
 //!
 //! [官方文档](https://help.aliyun.com/zh/ram/policy-language/)
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json;
 use std::collections::HashMap;
 
 /// Version 目前只有 "1"
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Serialize, PartialEq, Eq)]
 pub enum PolicyVersion {
     #[serde(rename = "1")]
     #[default]
@@ -15,7 +15,7 @@ pub enum PolicyVersion {
 }
 
 /// Effect = "Allow" | "Deny"
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub enum Effect {
     Allow,
     Deny,
@@ -23,7 +23,7 @@ pub enum Effect {
 
 /// JSON 中“可以是单值或数组”的通用包装：
 /// 比如 Action 可以是 "ecs:*" 或 ["ecs:*", "oss:*"]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum OneOrMany<T> {
     One(T),
@@ -42,35 +42,11 @@ impl<T> From<Vec<T>> for OneOrMany<T> {
     }
 }
 
-impl<T> OneOrMany<T> {
-    pub fn iter(&self) -> std::slice::Iter<'_, T> {
-        match self {
-            OneOrMany::One(v) => std::slice::from_ref(v).iter(),
-            OneOrMany::Many(vs) => vs.iter(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            OneOrMany::One(_) => false,
-            OneOrMany::Many(vs) => vs.is_empty(),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            OneOrMany::One(_) => 1,
-            OneOrMany::Many(vs) => vs.len(),
-        }
-    }
-}
-
 // Policy / Statement
-
 /// 条件值：文档要求 Number/Boolean/Date/IP 都用字符串包起来
 ///（例如 `"10"`、`"true"`、`"2019-08-12T17:00:00+08:00"`）
 /// 用新类型方便做 From<bool/number> 等转换。
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ConditionValue(pub String);
 
@@ -111,7 +87,7 @@ pub type ConditionMap =
     HashMap<ConditionOperator, HashMap<ConditionKey, OneOrMany<ConditionValue>>>;
 
 /// 条件块 Condition Block
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ConditionBlock(pub ConditionMap);
 
@@ -134,10 +110,6 @@ impl ConditionBlock {
         let key = key.into();
         let entry = self.0.entry(op).or_default();
         entry.insert(key, values.into());
-    }
-
-    pub fn get(&self, op: &str, key: &str) -> Option<&OneOrMany<ConditionValue>> {
-        self.0.get(op)?.get(key)
     }
 }
 
@@ -193,21 +165,15 @@ pub mod condition_ops {
 ///   <condition_block?>
 /// }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Statement {
     pub effect: Effect,
-
     /// Action / NotAction 二选一（语义层面），用 validate() 做约束。
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<OneOrMany<String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub not_action: Option<OneOrMany<String>>,
-
     pub resource: OneOrMany<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub condition: Option<ConditionBlock>,
 }
 
@@ -219,7 +185,7 @@ pub struct Statement {
 ///   "Statement": [ <statement>, ... ]
 /// }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Policy {
     #[serde(default)]
@@ -247,59 +213,6 @@ impl Statement {
             (None, None) => Err(PolicyValidationError::MissingActionAndNotAction),
             (Some(_), Some(_)) => Err(PolicyValidationError::BothActionAndNotActionPresent),
             _ => Ok(()),
-        }
-    }
-
-    pub fn is_allow(&self) -> bool {
-        matches!(self.effect, Effect::Allow)
-    }
-
-    pub fn is_deny(&self) -> bool {
-        matches!(self.effect, Effect::Deny)
-    }
-
-    /// 构造一个最简单的 Allow + Action 语句
-    pub fn new_allow<A, R>(actions: A, resources: R) -> Self
-    where
-        A: Into<OneOrMany<String>>,
-        R: Into<OneOrMany<String>>,
-    {
-        Statement {
-            effect: Effect::Allow,
-            action: Some(actions.into()),
-            not_action: None,
-            resource: resources.into(),
-            condition: None,
-        }
-    }
-
-    /// 构造一个最简单的 Deny + Action 语句
-    pub fn new_deny<A, R>(actions: A, resources: R) -> Self
-    where
-        A: Into<OneOrMany<String>>,
-        R: Into<OneOrMany<String>>,
-    {
-        Statement {
-            effect: Effect::Deny,
-            action: Some(actions.into()),
-            not_action: None,
-            resource: resources.into(),
-            condition: None,
-        }
-    }
-
-    /// 构造使用 NotAction 的 Allow 语句
-    pub fn new_allow_not_action<A, R>(not_actions: A, resources: R) -> Self
-    where
-        A: Into<OneOrMany<String>>,
-        R: Into<OneOrMany<String>>,
-    {
-        Statement {
-            effect: Effect::Allow,
-            action: None,
-            not_action: Some(not_actions.into()),
-            resource: resources.into(),
-            condition: None,
         }
     }
 
@@ -335,11 +248,6 @@ impl Policy {
         Ok(())
     }
 
-    /// JSON 互转辅助
-    pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(s)
-    }
-
     pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
@@ -365,7 +273,13 @@ fn build_policy_test() {
         ConditionValue::from("dev"),
     );
     // Statement
-    let stmt = Statement::new_allow("ecs:*".to_string(), "*".to_string()).with_condition(cond);
+    let stmt = Statement {
+        effect: Effect::Allow,
+        action: Some(OneOrMany::One("ecs:*".to_string())),
+        not_action: None,
+        resource: OneOrMany::One("*".to_string()),
+        condition: Some(cond),
+    };
     // Policy
     let policy = Policy::new().with_statement(stmt);
     println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
@@ -376,8 +290,13 @@ fn build_policy_test() {
         "kms:RecoveryWindowInDays",
         ConditionValue::from(10_i64),
     );
-    let stmt =
-        Statement::new_deny("kms:DeleteSecret".to_string(), "*".to_string()).with_condition(cond);
+    let stmt = Statement {
+        effect: Effect::Deny,
+        action: Some(OneOrMany::One("kms:DeleteSecret".to_string())),
+        not_action: None,
+        resource: OneOrMany::One("*".to_string()),
+        condition: Some(cond),
+    };
     let policy = Policy::new().with_statement(stmt);
     println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
 
@@ -387,7 +306,13 @@ fn build_policy_test() {
         "acs:CurrentTime",
         ConditionValue::from("2019-08-12T17:00:00+08:00"),
     );
-    let stmt = Statement::new_allow("ecs:*".to_string(), "*".to_string()).with_condition(cond);
+    let stmt = Statement {
+        effect: Effect::Deny,
+        action: Some(OneOrMany::One("oss:DeleteObject".to_string())),
+        not_action: None,
+        resource: OneOrMany::One("acs:oss:*:*:mybucket/myobject".to_string()),
+        condition: Some(cond),
+    };
     let s = Policy::new().with_statement(stmt);
     println!("policy json:\n{}", s.to_json_string_pretty().unwrap());
 }
