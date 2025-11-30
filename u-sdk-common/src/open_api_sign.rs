@@ -50,6 +50,7 @@ pub fn generate_can_uri(
     style: &OpenApiStyle,
 ) -> Result<(String, String, String), Error> {
     let query_map = to_query_map(query);
+    // println!("generate_can_uri query_map: {:#?}", query_map);
     let u = Url::parse_with_params(&format!("https://{}", host), query_map)
         .map_err(|_| Error::Common("url parsed failed!".to_owned()))?;
     // 使用的url::Url在构建的时候已经按照规范percentEncode过了，但是和文档提的java.net.URLEncoder一样也需要替换
@@ -242,7 +243,11 @@ pub fn get_openapi_request_header<T: Serialize>(
 /// 按照签名文档要求序列化请求参数为BTreeMap<String, String>
 ///
 /// 传入的query需要是一个to_value后为Value::Object的类型
-pub fn to_query_map(query: impl Serialize) -> BTreeMap<String, String> {
+///
+/// 这个方法会对传入的结构体进行扁平化处理，生成符合签名要求的键值对
+///
+/// 需要注意如果传入的是一个String，但是这个String本身是一个Struct序列化来的，那么不能直接传Struct，否则会被打平
+fn to_query_map(query: impl Serialize) -> BTreeMap<String, String> {
     let v = serde_json::to_value(query).expect("Serialize to serde_json::Value failed");
     if !v.is_object() {
         panic!("to_query_map: input query is not an object!");

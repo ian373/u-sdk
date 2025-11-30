@@ -1,7 +1,7 @@
 use super::Client;
 use super::ram_policy::Policy;
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Builder)]
@@ -11,6 +11,8 @@ pub struct AssumeRole<'a> {
     #[builder(start_fn)]
     pub(crate) client: &'a Client,
     duration_seconds: Option<u32>,
+    // 这个字段是String类型而不是需要flatten的结构体
+    #[serde(serialize_with = "policy_as_string")]
     policy: Option<Policy>,
     role_arn: &'a str,
     role_session_name: &'a str,
@@ -19,6 +21,19 @@ pub struct AssumeRole<'a> {
     // sts
     #[serde(skip_serializing)]
     pub(crate) sts_security_token: Option<&'a str>,
+}
+
+fn policy_as_string<S>(opt: &Option<Policy>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match opt {
+        Some(policy) => {
+            let s = serde_json::to_string(policy).map_err(serde::ser::Error::custom)?;
+            serializer.serialize_str(&s)
+        }
+        None => serializer.serialize_none(),
+    }
 }
 
 #[derive(Deserialize, Debug)]

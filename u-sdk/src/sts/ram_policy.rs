@@ -2,6 +2,7 @@
 //!
 //! [官方文档](https://help.aliyun.com/zh/ram/policy-language/)
 
+use bon::Builder;
 use serde::Serialize;
 use serde_json;
 use std::collections::HashMap;
@@ -185,12 +186,13 @@ pub struct Statement {
 ///   "Statement": [ <statement>, ... ]
 /// }
 /// ```
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Builder, Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Policy {
-    #[serde(default)]
-    pub version: PolicyVersion,
+    #[builder(field)]
     pub statement: Vec<Statement>,
+    #[builder(default)]
+    pub version: PolicyVersion,
 }
 
 // 校验 Action / NotAction 约束
@@ -208,58 +210,41 @@ pub enum PolicyValidationError {
 impl Statement {
     /// 校验当前语句是否满足文档要求：
     /// - Action / NotAction 必须二选一
-    pub fn validate(&self) -> Result<(), PolicyValidationError> {
+    fn validate(&self) -> Result<(), PolicyValidationError> {
         match (&self.action, &self.not_action) {
             (None, None) => Err(PolicyValidationError::MissingActionAndNotAction),
             (Some(_), Some(_)) => Err(PolicyValidationError::BothActionAndNotActionPresent),
             _ => Ok(()),
         }
     }
+}
 
-    pub fn with_condition(mut self, condition: ConditionBlock) -> Self {
-        self.condition = Some(condition);
-        self
+impl<S: policy_builder::State> PolicyBuilder<S> {
+    pub fn statement(mut self, stmt: Statement) -> Result<Self, PolicyValidationError> {
+        stmt.validate()?;
+        self.statement.push(stmt);
+        Ok(self)
+    }
+
+    pub fn statements(
+        mut self,
+        stmts: impl IntoIterator<Item = Statement>,
+    ) -> Result<Self, PolicyValidationError> {
+        for stmt in stmts.into_iter() {
+            stmt.validate()?;
+            self.statement.push(stmt);
+        }
+        Ok(self)
     }
 }
 
 impl Policy {
-    /// 创建一个空 Policy，Version 固定为 1
-    pub fn new() -> Self {
-        Policy {
-            version: PolicyVersion::V1,
-            statement: Vec::new(),
-        }
-    }
-
-    pub fn with_statement(mut self, stmt: Statement) -> Self {
-        self.statement.push(stmt);
-        self
-    }
-
-    pub fn add_statement(&mut self, stmt: Statement) {
-        self.statement.push(stmt);
-    }
-
-    /// 对每条语句执行结构校验
-    pub fn validate(&self) -> Result<(), PolicyValidationError> {
-        for s in &self.statement {
-            s.validate()?;
-        }
-        Ok(())
-    }
-
     pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
 
     pub fn to_json_string_pretty(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
-    }
-}
-
-impl Default for Policy {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -281,7 +266,7 @@ fn build_policy_test() {
         condition: Some(cond),
     };
     // Policy
-    let policy = Policy::new().with_statement(stmt);
+    let policy = Policy::builder().statement(stmt).unwrap().build();
     println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
 
     let mut cond = ConditionBlock::new();
@@ -297,7 +282,7 @@ fn build_policy_test() {
         resource: OneOrMany::One("*".to_string()),
         condition: Some(cond),
     };
-    let policy = Policy::new().with_statement(stmt);
+    let policy = Policy::builder().statement(stmt).unwrap().build();
     println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
 
     let mut cond = ConditionBlock::new();
@@ -313,6 +298,6 @@ fn build_policy_test() {
         resource: OneOrMany::One("acs:oss:*:*:mybucket/myobject".to_string()),
         condition: Some(cond),
     };
-    let s = Policy::new().with_statement(stmt);
+    let s = Policy::builder().statement(stmt).unwrap().build();
     println!("policy json:\n{}", s.to_json_string_pretty().unwrap());
 }

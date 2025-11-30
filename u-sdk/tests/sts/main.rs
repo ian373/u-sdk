@@ -2,6 +2,7 @@
 
 use serde::Deserialize;
 use u_sdk::sts;
+use u_sdk::sts::ram_policy::{Effect, Policy, Statement};
 
 #[derive(Deserialize, Debug)]
 pub struct STSConfig {
@@ -29,9 +30,29 @@ fn get_sts_client() -> sts::Client {
 #[ignore]
 async fn assume_role_test() {
     let client = get_sts_client();
+    let stmt1 = Statement {
+        effect: Effect::Allow,
+        action: Some("oss:ListObjects".to_owned().into()),
+        not_action: None,
+        resource: "acs:oss:*:*:app".to_owned().into(),
+        condition: None,
+    };
+    let stmt2 = Statement {
+        effect: Effect::Allow,
+        action: Some("oss:GetObject".to_owned().into()),
+        not_action: None,
+        resource: "acs:oss:*:*:app/".to_owned().into(),
+        condition: None,
+    };
+    let policy = Policy::builder()
+        .statements([stmt1, stmt2])
+        .unwrap()
+        .build();
+    println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
     let res = client
         .assume_role()
-        .duration_seconds(10)
+        .duration_seconds(1000)
+        .policy(policy)
         .role_arn("xxx")
         .role_session_name("test-session")
         .build()
