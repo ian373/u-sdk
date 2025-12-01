@@ -7,9 +7,10 @@ use crate::oss::Client;
 use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use crate::oss::utils::{
-    compute_md5_from_file, generate_presigned_url, get_content_md5, get_request_header,
-    hmac_sha256_bytes, into_request_failed_error, parse_get_object_response_header,
-    parse_xml_response, utc_date_str, utc_date_time_str, validate_object_name,
+    PresignParams, compute_md5_from_file, generate_presigned_url, get_content_md5,
+    get_request_header, hmac_sha256_bytes, into_request_failed_error,
+    parse_get_object_response_header, parse_xml_response, utc_date_str, utc_date_time_str,
+    validate_object_name,
 };
 use base64::{Engine, engine::general_purpose};
 use bytes::Bytes;
@@ -87,7 +88,16 @@ impl<'a> PutObject<'a> {
             }
         }
 
-        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Put);
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Put,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let data = match object {
             PutObjectBody::Bytes(bytes) => Body::from(bytes),
@@ -147,7 +157,11 @@ impl<'a> PutObject<'a> {
     /// 阿里云oss文档不建议使用预签名URL上传带有回调的对象：
     /// > 该方式常用于预签名URL上传文件的场景，通过将回调参数Base64编码后拼接在URL中实现自动回调。
     /// > 但由于回调信息暴露在 URL 中，存在一定的安全风险，仅建议用于临时访问或低敏感场景。[callback签名](https://help.aliyun.com/zh/oss/developer-reference/callback)
-    pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
+    pub async fn generate_presigned_url(
+        &self,
+        object_name: &str,
+        expires: i32,
+    ) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -189,8 +203,18 @@ impl<'a> PutObject<'a> {
                 .collect::<HashMap<_, _>>();
             header_map.extend(custom_meta_map);
         };
-        let signed_url =
-            generate_presigned_url(client, header_map, base_url, HTTPVerb::Put, expires);
+        let creds = client.credentials_provider.load().await?;
+        let presigned_params = PresignParams {
+            access_key_id: &creds.access_key_id,
+            access_key_secret: &creds.access_key_secret,
+            header_map,
+            presigned_url: base_url,
+            http_verb: HTTPVerb::Put,
+            url_expires: expires,
+            bucket: &client.bucket,
+            signing_region: &client.region,
+        };
+        let signed_url = generate_presigned_url(presigned_params);
         Ok(signed_url)
     }
 }
@@ -203,7 +227,7 @@ impl PostObject<'_> {
     ///
     /// # 参数
     /// - `expiration`：策略过期时间
-    pub fn generate_policy(
+    pub async fn generate_policy(
         self,
         expiration: OffsetDateTime,
     ) -> Result<GeneratePolicyResult, Error> {
@@ -213,9 +237,10 @@ impl PostObject<'_> {
         let date = utc_date_str(&now);
         let date_time = utc_date_time_str(&now);
         let client = self.client;
+        let creds = client.credentials_provider.load().await?;
         let credential = format!(
             "{}/{}/{}/oss/aliyun_v4_request",
-            client.access_key_id, date, client.region
+            creds.access_key_id, date, client.region
         );
 
         // 处理callback相关
@@ -267,8 +292,9 @@ impl PostObject<'_> {
         let policy_str = serde_json::to_string(&policy).unwrap();
         let encoded_policy = general_purpose::STANDARD.encode(policy_str.as_bytes());
 
+        let creds = client.credentials_provider.load().await?;
         let date_key = hmac_sha256_bytes(
-            format!("aliyun_v4{}", client.access_key_secret).as_bytes(),
+            format!("aliyun_v4{}", creds.access_key_secret).as_bytes(),
             &date,
         );
         let date_region_key = hmac_sha256_bytes(&date_key, &client.region);
@@ -342,7 +368,11 @@ impl GetObject<'_> {
     /// 使用STS临时访问凭证生成签名URL，该字段取值要求：最小值为 1 秒，最大有效时长为 43200秒（ 12 小时）。
     ///
     /// [签名文档和说明](https://help.aliyun.com/zh/oss/developer-reference/add-signatures-to-urls)
-    pub fn generate_presigned_url(&self, object_name: &str, expires: i32) -> Result<String, Error> {
+    pub async fn generate_presigned_url(
+        &self,
+        object_name: &str,
+        expires: i32,
+    ) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -359,8 +389,18 @@ impl GetObject<'_> {
 
         let header_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(self.headers_part()).unwrap()).unwrap();
-        let signed_url =
-            generate_presigned_url(client, header_map, base_url, HTTPVerb::Get, expires);
+        let creds = client.credentials_provider.load().await?;
+        let presigned_params = PresignParams {
+            access_key_id: &creds.access_key_id,
+            access_key_secret: &creds.access_key_secret,
+            header_map,
+            presigned_url: base_url,
+            http_verb: HTTPVerb::Get,
+            url_expires: expires,
+            bucket: &client.bucket,
+            signing_region: &client.region,
+        };
+        let signed_url = generate_presigned_url(presigned_params);
         Ok(signed_url)
     }
 
@@ -384,7 +424,16 @@ impl GetObject<'_> {
 
         let req_header_map =
             serde_json::from_value(serde_json::to_value(self.headers_part()).unwrap()).unwrap();
-        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Get);
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Get,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client
@@ -427,7 +476,16 @@ impl CopyObject<'_> {
         .unwrap();
 
         let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
-        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Put);
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Put,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client
@@ -477,7 +535,16 @@ impl AppendObject<'_> {
         req_header_map.insert("content-md5".to_owned(), get_content_md5(&data));
         req_header_map.insert("content-length".to_owned(), data.len().to_string());
 
-        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Post);
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Post,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client
@@ -537,7 +604,16 @@ impl DeleteMultipleObjects<'_> {
             get_content_md5(req_body.as_bytes()),
         );
 
-        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Post);
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Post,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client
@@ -568,7 +644,16 @@ impl HeadObject<'_> {
         .unwrap();
 
         let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
-        let header_map = get_request_header(client, req_header_map, &request_url, HTTPVerb::Head);
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Head,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client
@@ -627,11 +712,15 @@ impl Client {
         ))
         .unwrap();
 
+        let creds = self.credentials_provider.load().await?;
         let header_map = get_request_header(
-            self,
+            &creds.access_key_id,
+            &creds.access_key_secret,
             HashMap::with_capacity(0),
             &request_url,
             HTTPVerb::Delete,
+            &self.region,
+            Some(&self.bucket),
         );
 
         let resp = self
@@ -682,11 +771,15 @@ impl Client {
         ))
         .unwrap();
 
+        let creds = self.credentials_provider.load().await?;
         let header_map = get_request_header(
-            self,
+            &creds.access_key_id,
+            &creds.access_key_secret,
             HashMap::with_capacity(0),
             &request_url,
             HTTPVerb::Head,
+            &self.region,
+            Some(&self.bucket),
         );
 
         let resp = self

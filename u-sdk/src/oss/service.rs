@@ -1,6 +1,6 @@
 use super::Client;
 use super::sign_v4::HTTPVerb;
-use super::utils::parse_xml_response;
+use super::utils::{get_request_header, parse_xml_response};
 use crate::oss::Error;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
@@ -97,8 +97,10 @@ impl ListBuckets<'_> {
             request_header_map.insert("x-oss-resource-group-id".to_owned(), s.to_owned());
         }
 
-        let header_map = super::utils::get_request_header_with_bucket_region(
-            client,
+        let creds = client.credentials_provider.load().await?;
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
             request_header_map,
             &request_url,
             HTTPVerb::Get,

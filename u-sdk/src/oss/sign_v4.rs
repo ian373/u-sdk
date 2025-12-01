@@ -1,4 +1,3 @@
-use super::Client;
 use crate::oss::utils::{get_date_str, get_date_time_str};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
@@ -116,104 +115,107 @@ pub(crate) struct SignV4Param<'a> {
     pub date_time: &'a OffsetDateTime,
 }
 
-impl Client {
-    /// verb: GET, PUT, POST, DELETE...
-    /// uri like: "/", "/bucket/", "/bucket/object"; query: "xxx?xxx=xxx&xxx=xxx"
-    pub(crate) fn sign_v4(&self, sign_v4param: SignV4Param) -> String {
-        let date_time = sign_v4param.date_time;
-        let date = date_time
-            .format(&format_description!("[year][month][day]"))
-            .unwrap();
-        let date_key = sign_hmac_sha256_byte(
-            format!("aliyun_v4{}", self.access_key_secret).as_bytes(),
-            date.as_bytes(),
-        );
-        let date_region_key =
-            sign_hmac_sha256_byte(&date_key, sign_v4param.signing_region.as_bytes());
-        let date_region_service_key = sign_hmac_sha256_byte(&date_region_key, b"oss");
-        let signing_key = sign_hmac_sha256_byte(&date_region_service_key, b"aliyun_v4_request");
-        let gmt = gmt_format(date_time);
+/// verb: GET, PUT, POST, DELETE...
+/// uri like: "/", "/bucket/", "/bucket/object"; query: "xxx?xxx=xxx&xxx=xxx"
+pub(crate) fn sign_v4(
+    access_key_id: &str,
+    access_key_secret: &str,
+    sign_v4param: SignV4Param<'_>,
+) -> String {
+    let date_time = sign_v4param.date_time;
+    let date = date_time
+        .format(&format_description!("[year][month][day]"))
+        .unwrap();
+    let date_key = sign_hmac_sha256_byte(
+        format!("aliyun_v4{}", access_key_secret).as_bytes(),
+        date.as_bytes(),
+    );
+    let date_region_key = sign_hmac_sha256_byte(&date_key, sign_v4param.signing_region.as_bytes());
+    let date_region_service_key = sign_hmac_sha256_byte(&date_region_key, b"oss");
+    let signing_key = sign_hmac_sha256_byte(&date_region_service_key, b"aliyun_v4_request");
+    let gmt = gmt_format(date_time);
 
-        //region 构建string_to_sign
-        let scope = format!(
-            "{}/{}/{}",
-            date, sign_v4param.signing_region, "oss/aliyun_v4_request"
-        );
-        let canonical_request_str = get_canonical_request(
-            sign_v4param.http_verb,
-            sign_v4param.uri,
-            sign_v4param.bucket,
-            sign_v4param.header_map,
-            sign_v4param.additional_header,
-        );
-        // println!(
-        //     "canonical_request_str:====\n{}\n====",
-        //     canonical_request_str
-        // );
-        let mut hasher = Sha256::new();
-        hasher.update(canonical_request_str.as_bytes());
-        let hex_canonical_request = hex::encode(hasher.finalize());
-        let string_to_sign = format!(
-            "OSS4-HMAC-SHA256\n{}\n{}\n{}",
-            gmt, scope, hex_canonical_request
-        );
-        // println!("string_to_sign:===========\n{}\n===========", string_to_sign);
-        //endregion
+    //region 构建string_to_sign
+    let scope = format!(
+        "{}/{}/{}",
+        date, sign_v4param.signing_region, "oss/aliyun_v4_request"
+    );
+    let canonical_request_str = get_canonical_request(
+        sign_v4param.http_verb,
+        sign_v4param.uri,
+        sign_v4param.bucket,
+        sign_v4param.header_map,
+        sign_v4param.additional_header,
+    );
+    // println!(
+    //     "canonical_request_str:====\n{}\n====",
+    //     canonical_request_str
+    // );
+    let mut hasher = Sha256::new();
+    hasher.update(canonical_request_str.as_bytes());
+    let hex_canonical_request = hex::encode(hasher.finalize());
+    let string_to_sign = format!(
+        "OSS4-HMAC-SHA256\n{}\n{}\n{}",
+        gmt, scope, hex_canonical_request
+    );
+    // println!("string_to_sign:===========\n{}\n===========", string_to_sign);
+    //endregion
 
-        let signature = hex::encode(sign_hmac_sha256_byte(
-            &signing_key,
-            string_to_sign.as_bytes(),
-        ));
-        format!(
-            "OSS4-HMAC-SHA256 Credential={}/{}/{}/oss/aliyun_v4_request, AdditionalHeaders=host, Signature={}",
-            self.access_key_id, date, sign_v4param.signing_region, signature
-        )
-    }
+    let signature = hex::encode(sign_hmac_sha256_byte(
+        &signing_key,
+        string_to_sign.as_bytes(),
+    ));
+    format!(
+        "OSS4-HMAC-SHA256 Credential={}/{}/{}/oss/aliyun_v4_request, AdditionalHeaders=host, Signature={}",
+        access_key_id, date, sign_v4param.signing_region, signature
+    )
+}
 
-    pub(crate) fn generate_v4_signature(&self, sign_v4param: SignV4Param) -> String {
-        let date_str = get_date_str(sign_v4param.date_time);
-        let data_time_str = get_date_time_str(sign_v4param.date_time);
-        let date_key = sign_hmac_sha256_byte(
-            format!("aliyun_v4{}", self.access_key_secret).as_bytes(),
-            date_str.as_bytes(),
-        );
-        let date_region_key =
-            sign_hmac_sha256_byte(&date_key, sign_v4param.signing_region.as_bytes());
-        let date_region_service_key = sign_hmac_sha256_byte(&date_region_key, b"oss");
-        let signing_key = sign_hmac_sha256_byte(&date_region_service_key, b"aliyun_v4_request");
+pub(crate) fn generate_v4_signature(
+    access_key_secret: &str,
+    sign_v4param: SignV4Param<'_>,
+) -> String {
+    let date_str = get_date_str(sign_v4param.date_time);
+    let data_time_str = get_date_time_str(sign_v4param.date_time);
+    let date_key = sign_hmac_sha256_byte(
+        format!("aliyun_v4{}", access_key_secret).as_bytes(),
+        date_str.as_bytes(),
+    );
+    let date_region_key = sign_hmac_sha256_byte(&date_key, sign_v4param.signing_region.as_bytes());
+    let date_region_service_key = sign_hmac_sha256_byte(&date_region_key, b"oss");
+    let signing_key = sign_hmac_sha256_byte(&date_region_service_key, b"aliyun_v4_request");
 
-        //region 构建string_to_sign
-        let scope = format!(
-            "{}/{}/{}",
-            date_str, sign_v4param.signing_region, "oss/aliyun_v4_request"
-        );
-        let canonical_request_str = get_canonical_request(
-            sign_v4param.http_verb,
-            sign_v4param.uri,
-            sign_v4param.bucket,
-            sign_v4param.header_map,
-            sign_v4param.additional_header,
-        );
-        // println!(
-        //     "canonical_request_str:====\n{}\n====",
-        //     canonical_request_str
-        // );
-        let mut hasher = Sha256::new();
-        hasher.update(canonical_request_str.as_bytes());
-        let hex_canonical_request = hex::encode(hasher.finalize());
-        let string_to_sign = format!(
-            "OSS4-HMAC-SHA256\n{}\n{}\n{}",
-            data_time_str, scope, hex_canonical_request
-        );
-        // println!(
-        //     "string_to_sign:===========\n{}\n===========",
-        //     string_to_sign
-        // );
-        //endregion
+    //region 构建string_to_sign
+    let scope = format!(
+        "{}/{}/{}",
+        date_str, sign_v4param.signing_region, "oss/aliyun_v4_request"
+    );
+    let canonical_request_str = get_canonical_request(
+        sign_v4param.http_verb,
+        sign_v4param.uri,
+        sign_v4param.bucket,
+        sign_v4param.header_map,
+        sign_v4param.additional_header,
+    );
+    // println!(
+    //     "canonical_request_str:====\n{}\n====",
+    //     canonical_request_str
+    // );
+    let mut hasher = Sha256::new();
+    hasher.update(canonical_request_str.as_bytes());
+    let hex_canonical_request = hex::encode(hasher.finalize());
+    let string_to_sign = format!(
+        "OSS4-HMAC-SHA256\n{}\n{}\n{}",
+        data_time_str, scope, hex_canonical_request
+    );
+    // println!(
+    //     "string_to_sign:===========\n{}\n===========",
+    //     string_to_sign
+    // );
+    //endregion
 
-        hex::encode(sign_hmac_sha256_byte(
-            &signing_key,
-            string_to_sign.as_bytes(),
-        ))
-    }
+    hex::encode(sign_hmac_sha256_byte(
+        &signing_key,
+        string_to_sign.as_bytes(),
+    ))
 }

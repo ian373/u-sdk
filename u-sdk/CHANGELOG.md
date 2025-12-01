@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- [lib]
+- 添加`credentials`模块，定义`Credentials` trait和相关实现供阿里云各个sdk模块使用
+
 - [oss]
 - 添加`GetObject`预签名URL的方法
 - 添加`PutObject`预签名URL的方法
@@ -18,9 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 添加`PutObject`生成预签名时携带callback的功能
 - 添加oss callback服务器端验证的axum Layer
 
+
 - [sts]
 - 添加sts模块，实现`AssumeRole`功能
 - 添加构建policy相关的方法
+
 
 - [translate]
 - 支持sts临时凭证进行相关api调用
@@ -29,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [oss]
 - 更新和完善了代码/测试/用户的文档说明
+- 重构/简化了签名模块的函数参数结构
 
 ### Fixed
 
