@@ -88,7 +88,7 @@ impl AssumeRole<'_> {
             &client.access_key_id,
             sign_params,
         )
-        .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
+        .map_err(|e| Error::Common(format!("get_openapi_request_header error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
         let resp = client

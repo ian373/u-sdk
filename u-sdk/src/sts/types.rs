@@ -3,6 +3,7 @@ use super::ram_policy::Policy;
 use bon::Builder;
 use serde::{Deserialize, Serialize, Serializer};
 
+/// [AssumRole API](https://help.aliyun.com/zh/ram/developer-reference/api-sts-2015-04-01-assumerole)
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Builder)]
 #[serde(rename_all = "PascalCase")]
