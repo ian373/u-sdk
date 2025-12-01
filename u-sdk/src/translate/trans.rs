@@ -2,9 +2,9 @@ use super::Client;
 use super::Error;
 use super::types_rs::*;
 use crate::translate::utils::parse_json_response;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use u_sdk_common::helper::into_header_map;
-use u_sdk_common::open_api_sign::{SignParams, get_common_headers};
+use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 
 impl Client {
     /// 机器翻译-通用版和专业版
@@ -27,22 +27,22 @@ impl Client {
 impl Translate<'_> {
     pub async fn send(&self) -> Result<TranslateResponse, Error> {
         let client = self.client;
-        let query_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+
         let mut sign_params = SignParams {
             req_method: "GET",
             host: &client.host,
-            query_map: &query_map,
-            x_headers: None,
-            body_bytes: None,
+            query_map: self,
             x_acs_action: "TranslateGeneral",
             x_acs_version: "2018-10-12",
-            x_acs_security_token: None,
+            x_acs_security_token: self.sts_security_token,
+            request_body: None,
+            style: &client.style,
         };
         if self.scene != "general" {
             sign_params.x_acs_action = "Translate";
         }
 
-        let (common_headers, url_) = get_common_headers(
+        let (common_headers, url_) = get_openapi_request_header(
             &client.access_key_secret,
             &client.access_key_id,
             sign_params,
@@ -65,21 +65,21 @@ impl Translate<'_> {
 impl GetDetectLanguage<'_> {
     pub async fn send(&self) -> Result<String, Error> {
         let client = self.client;
-        let mut query_map = BTreeMap::new();
+        let mut query_map = HashMap::with_capacity(1);
         query_map.insert("SourceText".to_owned(), self.source_text.to_owned());
 
         let sign_params = SignParams {
             req_method: "GET",
             host: &client.host,
             query_map: &query_map,
-            x_headers: None,
-            body_bytes: None,
             x_acs_action: "GetDetectLanguage",
             x_acs_version: "2018-10-12",
-            x_acs_security_token: None,
+            x_acs_security_token: self.sts_security_token,
+            request_body: None,
+            style: &client.style,
         };
 
-        let (common_headers, url_) = get_common_headers(
+        let (common_headers, url_) = get_openapi_request_header(
             &client.access_key_secret,
             &client.access_key_id,
             sign_params,

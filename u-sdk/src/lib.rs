@@ -12,3 +12,6 @@ pub mod server_chan;
 
 #[cfg(feature = "deep_seek")]
 pub mod deep_seek;
+
+#[cfg(feature = "sts")]
+pub mod sts;

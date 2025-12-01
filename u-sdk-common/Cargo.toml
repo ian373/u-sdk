@@ -12,6 +12,7 @@ hmac = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
 time = { workspace = true }
+rand = { workspace = true }
 url = { workspace = true }
 hex = { workspace = true }
 thiserror = { workspace = true }
