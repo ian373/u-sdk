@@ -10,9 +10,6 @@ pub struct Translate<'a> {
     #[builder(start_fn)]
     #[serde(skip_serializing)]
     pub(crate) client: &'a Client,
-    // sts
-    #[serde(skip_serializing)]
-    pub(crate) sts_security_token: Option<&'a str>,
 
     // 请求参数
     format_type: &'a str,
@@ -49,8 +46,6 @@ pub struct GetDetectLanguage<'a> {
     #[builder(start_fn)]
     pub(crate) client: &'a Client,
     pub(crate) source_text: &'a str,
-    // sts token，用于签名时使用
-    pub(crate) sts_security_token: Option<&'a str>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]

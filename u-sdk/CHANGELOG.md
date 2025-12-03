@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [sts]
 - 添加sts模块，实现`AssumeRole`功能
 - 添加构建policy相关的方法
+- 添加临时凭证的Credentials功能
 
 
 - [translate]
