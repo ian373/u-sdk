@@ -43,10 +43,15 @@ impl DescribeRegions<'_> {
         .unwrap();
 
         let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::with_capacity(0),
+            req_header_map,
             &request_url,
             HTTPVerb::Get,
             &client.region,

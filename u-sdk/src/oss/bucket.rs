@@ -48,9 +48,14 @@ impl PutBucket<'_> {
         let client = self.client;
         let request_url =
             Url::parse(&format!("https://{}.{}", self.bucket_name, client.endpoint)).unwrap();
-        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let mut req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
 
         let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
         let header = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -168,10 +173,15 @@ impl ListObjectsV2<'_> {
         .unwrap();
 
         let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
         let header = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::new(),
+            req_header_map,
             &sign_url,
             HTTPVerb::Get,
             &client.region,
@@ -259,10 +269,15 @@ impl GetBucketInfo<'_> {
         .unwrap();
 
         let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::new(),
+            req_header_map,
             &request_url,
             HTTPVerb::Get,
             &client.region,
@@ -307,10 +322,15 @@ impl GetBucketLocation<'_> {
         .unwrap();
 
         let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::new(),
+            req_header_map,
             &request_url,
             HTTPVerb::Get,
             &client.region,
@@ -372,10 +392,15 @@ impl GetBucketStat<'_> {
         .unwrap();
 
         let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::new(),
+            req_header_map,
             &request_url,
             HTTPVerb::Get,
             &client.region,

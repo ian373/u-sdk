@@ -65,7 +65,7 @@ impl Translate<'_> {
 impl GetDetectLanguage<'_> {
     pub async fn send(&self) -> Result<String, Error> {
         let client = self.client;
-        let mut query_map = HashMap::with_capacity(1);
+        let mut query_map = HashMap::new();
         query_map.insert("SourceText".to_owned(), self.source_text.to_owned());
 
         let sign_params = SignParams {

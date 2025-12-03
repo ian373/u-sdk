@@ -77,7 +77,7 @@ pub(crate) async fn into_request_failed_error(resp: reqwest::Response) -> Error 
 }
 
 // TODO 放到common-lib中供全局使用
-pub(crate) async fn parse_xml_response<T: serde::de::DeserializeOwned>(
+pub(crate) async fn parse_xml_response<T: DeserializeOwned>(
     resp: reqwest::Response,
 ) -> Result<T, Error> {
     let status = resp.status();
@@ -344,8 +344,8 @@ fn partition_header(
 pub(crate) fn parse_get_object_response_header<T: DeserializeOwned>(
     header: &HeaderMap,
 ) -> (T, HashMap<String, String>) {
-    let mut map = Map::with_capacity(30);
-    let mut custom_meta_map = HashMap::with_capacity(30);
+    let mut map = Map::new();
+    let mut custom_meta_map = HashMap::new();
     for (name, val) in header {
         let name_s = name.as_str();
         if let Ok(s) = val.to_str() {

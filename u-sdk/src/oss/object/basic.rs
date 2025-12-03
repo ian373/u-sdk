@@ -89,6 +89,11 @@ impl<'a> PutObject<'a> {
         }
 
         let creds = client.credentials_provider.load().await?;
+        // sts token
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -148,6 +153,8 @@ impl<'a> PutObject<'a> {
 
     /// 生成用于上传的预签名URL（Presigned URL），生成的url使用PUT方法上传文件
     ///
+    /// [在URL中包含签名](https://help.aliyun.com/zh/oss/developer-reference/add-signatures-to-urls)
+    ///
     /// [OSS不直接提供限制上传文件类型和大小的功能](https://help.aliyun.com/zh/oss/how-do-i-limit-object-formats-and-sizes-when-i-upload-objects-to-oss)
     ///
     /// # 参数
@@ -193,6 +200,14 @@ impl<'a> PutObject<'a> {
             }
         }
 
+        let creds = client.credentials_provider.load().await?;
+        // sts token
+        if let Some(token) = &creds.sts_security_token {
+            base_url
+                .query_pairs_mut()
+                .append_pair("x-oss-security-token", token);
+        }
+
         let mut header_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         if !self.custom_metas.is_empty() {
@@ -203,7 +218,7 @@ impl<'a> PutObject<'a> {
                 .collect::<HashMap<_, _>>();
             header_map.extend(custom_meta_map);
         };
-        let creds = client.credentials_provider.load().await?;
+
         let presigned_params = PresignParams {
             access_key_id: &creds.access_key_id,
             access_key_secret: &creds.access_key_secret,
@@ -227,6 +242,9 @@ impl PostObject<'_> {
     ///
     /// # 参数
     /// - `expiration`：策略过期时间
+    ///
+    /// # 注意
+    /// 当你使用sts的方式生成policy后。在发起表单请求的时候请求头如果没有携带`x-oss-security-token`，会报`InvalidAccessKeyId`的错误
     pub async fn generate_policy(
         self,
         expiration: OffsetDateTime,
@@ -267,7 +285,7 @@ impl PostObject<'_> {
                 bucket: self.bucket,
                 x_oss_signature_version: "OSS4-HMAC-SHA256".to_owned(),
                 x_oss_credential: credential.clone(),
-                x_oss_security_token: self.x_oss_security_token,
+                x_oss_security_token: creds.sts_security_token,
                 x_oss_date: date_time.clone(),
                 content_length_range: self.content_length_range,
                 key: self.key,
@@ -381,15 +399,21 @@ impl GetObject<'_> {
             client.bucket, client.endpoint, object_name
         ))
         .unwrap();
+        // 先把所有query参数添加到url中，这样在签名的时候直接传递url即可获取所有query参数
         let query_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(self.queries_part()).unwrap()).unwrap();
         for (k, v) in query_map.iter() {
             base_url.query_pairs_mut().append_pair(k, v);
         }
+        let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            base_url
+                .query_pairs_mut()
+                .append_pair("x-oss-security-token", token);
+        }
 
         let header_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(self.headers_part()).unwrap()).unwrap();
-        let creds = client.credentials_provider.load().await?;
         let presigned_params = PresignParams {
             access_key_id: &creds.access_key_id,
             access_key_secret: &creds.access_key_secret,
@@ -422,9 +446,12 @@ impl GetObject<'_> {
             request_url.query_pairs_mut().append_pair(k, v);
         }
 
-        let req_header_map =
+        let mut req_header_map: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(self.headers_part()).unwrap()).unwrap();
         let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -475,8 +502,12 @@ impl CopyObject<'_> {
         ))
         .unwrap();
 
-        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let mut req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -536,6 +567,10 @@ impl AppendObject<'_> {
         req_header_map.insert("content-length".to_owned(), data.len().to_string());
 
         let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -594,7 +629,7 @@ impl DeleteMultipleObjects<'_> {
             object: &self.objects,
         };
         let req_body = quick_xml::se::to_string_with_root("Delete", &delete_req).unwrap();
-        let mut req_header_map = HashMap::with_capacity(3);
+        let mut req_header_map = HashMap::new();
         if let Some(encoding_type) = self.encoding_type {
             req_header_map.insert("encoding-type".to_owned(), encoding_type.to_owned());
         }
@@ -605,6 +640,10 @@ impl DeleteMultipleObjects<'_> {
         );
 
         let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -643,8 +682,13 @@ impl HeadObject<'_> {
         ))
         .unwrap();
 
-        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let mut req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
         let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
@@ -713,10 +757,15 @@ impl Client {
         .unwrap();
 
         let creds = self.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
+
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::with_capacity(0),
+            req_header_map,
             &request_url,
             HTTPVerb::Delete,
             &self.region,
@@ -772,10 +821,14 @@ impl Client {
         .unwrap();
 
         let creds = self.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_owned(), token.clone());
+        }
         let header_map = get_request_header(
             &creds.access_key_id,
             &creds.access_key_secret,
-            HashMap::with_capacity(0),
+            req_header_map,
             &request_url,
             HTTPVerb::Head,
             &self.region,
@@ -794,7 +847,7 @@ impl Client {
             return Err(into_request_failed_error(resp).await);
         }
 
-        let mut response_header = Map::with_capacity(10);
+        let mut response_header = Map::new();
         for (name, val) in resp.headers().iter() {
             let name_s = name.as_str();
             if let Ok(s) = val.to_str() {

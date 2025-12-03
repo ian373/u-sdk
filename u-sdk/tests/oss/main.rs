@@ -18,6 +18,7 @@ pub struct OssConfig {
     pub endpoint: String,
     pub bucket_name: String,
     pub region: String,
+    pub sts_security_token: Option<String>,
 }
 
 pub struct OssCredsProvider {
@@ -25,9 +26,13 @@ pub struct OssCredsProvider {
 }
 
 impl OssCredsProvider {
-    pub fn new(access_key_id: String, access_key_secret: String) -> Self {
+    pub fn new(
+        access_key_id: String,
+        access_key_secret: String,
+        sts_security_token: Option<String>,
+    ) -> Self {
         Self {
-            creds: Credentials::new(access_key_id, access_key_secret, None, None),
+            creds: Credentials::new(access_key_id, access_key_secret, sts_security_token, None),
         }
     }
 }
@@ -45,6 +50,7 @@ fn get_oss_client() -> oss::Client {
     let creds_provider = Arc::new(OssCredsProvider::new(
         conf.access_key_id,
         conf.access_key_secret,
+        conf.sts_security_token,
     ));
     oss::Client::builder()
         .credentials_provider(creds_provider)
@@ -87,7 +93,7 @@ async fn put_bucket_test() {
     let client = get_oss_client();
     let res = client
         .put_bucket()
-        .bucket_name("example-to-del")
+        .bucket_name("example-bucket-io")
         .build()
         .send()
         .await;
@@ -419,7 +425,7 @@ async fn append_object_test() {
         .x_metas([("key1", "value1"), ("key2", "value2")])
         .content_type("text/plain")
         .build()
-        .send("test/append_object_2.txt", 0, b"6666666".to_vec())
+        .send("test/append_object_7.txt", 0, b"6666666".to_vec())
         .await;
 
     match res {

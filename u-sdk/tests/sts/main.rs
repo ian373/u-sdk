@@ -51,7 +51,7 @@ async fn assume_role_test() {
     println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
     let res = client
         .assume_role()
-        .duration_seconds(1000)
+        .duration_seconds(3600)
         .policy(policy)
         .role_arn("xxx")
         .role_session_name("test-session")
