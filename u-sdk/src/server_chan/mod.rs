@@ -1,4 +1,4 @@
-//! Server酱3 sdk
+//! Server chan 3 sdk
 
 use bon::{Builder, bon};
 use reqwest::StatusCode;

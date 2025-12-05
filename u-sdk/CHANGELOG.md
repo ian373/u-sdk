@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+[lib]
+
+- 更新了文档
+
 [oss]
 
 - 更新和完善了代码/测试/用户的文档说明

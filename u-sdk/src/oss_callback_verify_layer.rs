@@ -1,3 +1,6 @@
+//! OSS callback验证中间件 Layer
+//!
+//! 只适用于 tokio + axum 环境
 use axum::body::{Body, to_bytes};
 use axum::extract::Request;
 use axum::http::{HeaderMap, StatusCode};
