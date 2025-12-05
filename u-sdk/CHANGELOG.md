@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [lib]
 
 - 添加`credentials`模块，定义`Credentials` trait和相关实现供阿里云各个sdk模块使用
+- 添加`oss_callback_verify_layer`模块，实现oss callback服务器端验证的axum Layer
 
 [oss]
 
