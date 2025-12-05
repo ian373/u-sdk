@@ -1,7 +1,3 @@
+host = "dm.aliyuncs.com"
 access_key_id = "testid"
 access_key_secret = "secret"
-
-# 发送邮件的邮箱，即在阿里云邮件推送控制台配置的邮箱
-account_name = "example@example.com"
-# 用于接受消息的测试邮箱
-to_address = "example@example.com"

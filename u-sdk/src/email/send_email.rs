@@ -1,11 +1,10 @@
+use super::Client;
 use super::Error;
-use super::utils::{parse_json_response, sign_params};
-use super::{BASE_URL, Client};
-use u_sdk_common::helper::now_iso8601;
-
+use super::utils::parse_json_response;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use u_sdk_common::helper::into_header_map;
+use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 
 //region response
 #[derive(Deserialize, Debug)]
@@ -16,6 +15,7 @@ pub struct SingleSendEmailResult {
 }
 //endregion
 
+#[serde_with::skip_serializing_none]
 #[derive(Builder, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct SingleSendEmail<'a> {
@@ -28,19 +28,12 @@ pub struct SingleSendEmail<'a> {
     reply_to_address: &'a str,
     subject: &'a str,
     to_address: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
     click_trace: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     from_alias: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     html_body: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     tag_name: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     text_body: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     reply_address: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     reply_address_alias: Option<&'a str>,
 }
 
@@ -52,38 +45,31 @@ impl Client {
 
 impl SingleSendEmail<'_> {
     pub async fn send(&self) -> Result<SingleSendEmailResult, Error> {
-        // 添加剩余的公共参数
-        let mut params_map = self.client.known_params.clone();
-        params_map.insert("Timestamp".to_owned(), now_iso8601());
-        params_map.insert(
-            "SignatureNonce".to_owned(),
-            uuid::Uuid::new_v4().to_string(),
-        );
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
 
-        // 添加特定api参数
-        if self.html_body.is_none() && self.text_body.is_none() {
-            return Err(Error::Common(
-                "one of html_body or text_body must be set".to_owned(),
-            ));
-        }
+        let sign_params = SignParams {
+            req_method: "GET",
+            host: &client.host,
+            query_map: self,
+            x_acs_action: "SingleSendMail",
+            x_acs_version: "2015-11-23",
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &client.style,
+        };
 
-        let mut api_params_map: BTreeMap<String, String> =
-            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
-        params_map.append(&mut api_params_map);
-        params_map.insert("Action".to_owned(), "SingleSendMail".to_owned());
-
-        // 计算和添加签名
-        let signature = sign_params(&params_map, &self.client.access_key_secret);
-        params_map.insert("Signature".to_owned(), signature);
+        let (headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let resp = self
             .client
             .http_client
-            .post(BASE_URL)
-            .form(&params_map)
+            .get(url_)
+            .headers(into_header_map(headers))
             .send()
-            .await
-            .map_err(|e| Error::Other(e.into()))?;
+            .await?;
 
         let resp = parse_json_response(resp).await?;
         Ok(resp)

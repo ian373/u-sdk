@@ -1,13 +1,14 @@
 //! 邮件推送sdk
 
+pub use self::types_rs::*;
 mod account;
-pub use account::{DescAccountSummary, DescAccountSummaryBuilder, DescAccountSummaryResult};
+pub use account::{DescAccountSummary, DescAccountSummaryBuilder};
 
 mod domain;
-pub use domain::{QueryDomainByParam, QueryDomainByParamBuilder, QueryDomainByParamResult};
+pub use domain::{QueryDomainByParam, QueryDomainByParamBuilder};
 
 mod ip_protection;
-pub use ip_protection::{GetIpProtection, GetIpProtectionBuilder, GetIpProtectionResult};
+pub use ip_protection::{GetIpProtection, GetIpProtectionBuilder};
 
 mod send_email;
 pub use send_email::{SingleSendEmail, SingleSendEmailBuilder, SingleSendEmailResult};
@@ -15,43 +16,43 @@ pub use send_email::{SingleSendEmail, SingleSendEmailBuilder, SingleSendEmailRes
 mod utils;
 
 mod error;
+mod types_rs;
+
 pub use error::Error;
 
-pub(crate) const BASE_URL: &str = "https://dm.aliyuncs.com";
-
+use crate::credentials::CredentialsProvider;
 use bon::bon;
-use std::collections::BTreeMap;
+use std::sync::Arc;
+use u_sdk_common::open_api_sign::OpenApiStyle;
 
 pub struct Client {
-    // 公共参数固定不变的部分
-    known_params: BTreeMap<String, String>,
-    access_key_secret: String,
+    credentials_provider: Arc<dyn CredentialsProvider>,
+    host: String,
     http_client: reqwest::Client,
+    style: OpenApiStyle,
 }
 
 #[bon]
 impl Client {
     #[builder(on(String, into))]
-    pub fn new(
-        access_key_id: String,
-        access_key_secret: String,
-        region_id: Option<String>,
-    ) -> Self {
-        let mut map = BTreeMap::new();
-        map.insert("Format".to_owned(), "JSON".to_owned());
-        map.insert("Version".to_owned(), "2015-11-23".to_owned());
-        map.insert("AccessKeyId".to_owned(), access_key_id);
-        map.insert("SignatureMethod".to_owned(), "HMAC-SHA1".to_owned());
-        map.insert("SignatureVersion".to_owned(), "1.0".to_owned());
-
-        if let Some(r) = region_id {
-            map.insert("RegionId".to_owned(), r);
-        }
-
+    pub fn new(credentials_provider: Arc<dyn CredentialsProvider>, host: String) -> Self {
         Self {
-            known_params: map,
-            access_key_secret,
+            credentials_provider,
             http_client: reqwest::Client::new(),
+            host,
+            style: OpenApiStyle::RPC,
         }
+    }
+
+    pub fn desc_account_summary(&self) -> DescAccountSummaryBuilder<'_> {
+        DescAccountSummary::builder(self)
+    }
+
+    pub fn query_domain_by_param(&self) -> QueryDomainByParamBuilder<'_> {
+        QueryDomainByParam::builder(self)
+    }
+
+    pub fn get_ip_protection(&self) -> GetIpProtectionBuilder<'_> {
+        GetIpProtection::builder(self)
     }
 }

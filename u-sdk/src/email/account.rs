@@ -1,28 +1,11 @@
+use super::Client;
 use super::Error;
-use super::utils::{parse_json_response, sign_params};
-use super::{BASE_URL, Client};
-use u_sdk_common::helper::now_iso8601;
-
+use super::types_rs::*;
+use super::utils::parse_json_response;
 use bon::Builder;
-use serde::Deserialize;
-
-//region response
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct DescAccountSummaryResult {
-    pub daily_quota: u32,
-    pub domains: u32,
-    pub enable_times: u32,
-    pub mail_addresses: u32,
-    pub max_quota_level: u32,
-    pub month_quota: u32,
-    pub quota_level: u8,
-    pub request_id: String,
-    pub tags: u32,
-    pub templates: u32,
-    pub user_status: u8,
-}
-//endregion
+use std::collections::HashMap;
+use u_sdk_common::helper::into_header_map;
+use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 
 #[derive(Builder)]
 pub struct DescAccountSummary<'a> {
@@ -30,31 +13,31 @@ pub struct DescAccountSummary<'a> {
     client: &'a Client,
 }
 
-impl Client {
-    pub fn desc_account_summary(&self) -> DescAccountSummaryBuilder<'_> {
-        DescAccountSummary::builder(self)
-    }
-}
-
 impl DescAccountSummary<'_> {
     pub async fn send(&self) -> Result<DescAccountSummaryResult, Error> {
-        let mut params_map = self.client.known_params.clone();
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
 
-        params_map.insert("Timestamp".to_owned(), now_iso8601());
-        params_map.insert(
-            "SignatureNonce".to_owned(),
-            uuid::Uuid::new_v4().to_string(),
-        );
-        params_map.insert("Action".to_owned(), "DescAccountSummary".to_owned());
+        let sign_params = SignParams {
+            req_method: "GET",
+            host: &client.host,
+            query_map: HashMap::<&str, &str>::new(),
+            x_acs_action: "DescAccountSummary",
+            x_acs_version: "2015-11-23",
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &client.style,
+        };
 
-        let signature = sign_params(&params_map, &self.client.access_key_secret);
-        params_map.insert("Signature".to_owned(), signature);
+        let (headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let resp = self
             .client
             .http_client
-            .post(BASE_URL)
-            .form(&params_map)
+            .get(url_)
+            .headers(into_header_map(headers))
             .send()
             .await?;
 
