@@ -1,5 +1,8 @@
 #![doc = include_str!("../README.md")]
 
+#[cfg(feature = "oss_callback_verify_layer")]
+pub mod oss_callback_verify_layer;
+
 #[cfg(feature = "email")]
 pub mod email;
 #[cfg(feature = "oss")]

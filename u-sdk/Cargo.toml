@@ -14,19 +14,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 email = []
-oss = [
-    "dep:quick-xml",
-    "dep:tokio",
-    "dep:tokio-util",
-    "reqwest/stream",
-    "dep:bytes",
-    "dep:tokio-stream",
-    "dep:tower",
-    "dep:axum",
-    "dep:rsa",
-    #因为rsa需要使用md-5作为hash算法，这里需要开启md-5的oid特性才能够支持
-    "md-5/oid"
-]
+oss = ["dep:quick-xml", "dep:tokio", "dep:tokio-util", "reqwest/stream", "dep:bytes", "dep:tokio-stream"]
+#因为rsa需要使用md-5作为hash算法，这里需要开启md-5的oid特性才能够支持
+oss_callback_verify_layer = ["dep:tower", "dep:axum", "dep:rsa", "md-5/oid"]
 # 机器翻译
 translate = []
 server_chan = []
@@ -55,7 +45,6 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-uuid = { workspace = true }
 quick-xml = { workspace = true, optional = true }
 bon = { workspace = true }
 tokio = { workspace = true, optional = true }
