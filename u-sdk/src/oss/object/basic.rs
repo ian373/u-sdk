@@ -309,8 +309,6 @@ impl PostObject<'_> {
         };
         let policy_str = serde_json::to_string(&policy).unwrap();
         let encoded_policy = general_purpose::STANDARD.encode(policy_str.as_bytes());
-
-        let creds = client.credentials_provider.load().await?;
         let date_key = hmac_sha256_bytes(
             format!("aliyun_v4{}", creds.access_key_secret).as_bytes(),
             &date,

@@ -45,6 +45,13 @@ impl Client {
 
 impl SingleSendEmail<'_> {
     pub async fn send(&self) -> Result<SingleSendEmailResult, Error> {
+        // HtmlBody 和 TextBody 是针对不同类型的邮件内容，两者必须传其一
+        if self.html_body.is_none() && self.text_body.is_none() {
+            return Err(Error::Common(
+                "one of html_body or text_body must be set".to_owned(),
+            ));
+        }
+
         let client = self.client;
         let creds = client.credentials_provider.load().await?;
 

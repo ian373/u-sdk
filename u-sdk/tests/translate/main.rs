@@ -12,11 +12,11 @@ struct MTConfig {
     pub sts_security_token: Option<String>,
 }
 
-struct MTCredentialsProvider {
+struct MTCredsProvider {
     creds: Credentials,
 }
 
-impl MTCredentialsProvider {
+impl MTCredsProvider {
     fn new(
         access_key_id: String,
         access_key_secret: String,
@@ -29,7 +29,7 @@ impl MTCredentialsProvider {
 }
 
 #[async_trait::async_trait]
-impl CredentialsProvider for MTCredentialsProvider {
+impl CredentialsProvider for MTCredsProvider {
     async fn load(&self) -> Result<Credentials, CredentialsError> {
         Ok(self.creds.clone())
     }
@@ -38,7 +38,7 @@ impl CredentialsProvider for MTCredentialsProvider {
 fn get_trans_client() -> Client {
     let conf_str = std::fs::read_to_string("tests/translate/config.toml").unwrap();
     let conf = toml::from_str::<MTConfig>(&conf_str).unwrap();
-    let provider = MTCredentialsProvider::new(
+    let provider = MTCredsProvider::new(
         conf.access_key_id,
         conf.access_key_secret,
         conf.sts_security_token,
