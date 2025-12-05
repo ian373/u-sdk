@@ -1,4 +1,4 @@
-//! 阿里云机器翻译sdk
+//! 阿里云机器翻译(MT)sdk
 
 use bon::bon;
 use std::sync::Arc;

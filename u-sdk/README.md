@@ -3,16 +3,17 @@
 sdk包含有以下应用部分功能：
 
 - [阿里云邮件服务(email)](https://help.aliyun.com/zh/direct-mail/api-dm-2015-11-23-overview)
-- [阿里云对象存储(oss)](https://help.aliyun.com/zh/oss/developer-reference/description)
-- [阿里云机器翻译(translate)](https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-dir)
+- [阿里云对象存储(oss)](https://help.aliyun.com/zh/oss/developer-reference/list-of-operations-by-function)
+- [阿里云机器翻译(translate)](https://help.aliyun.com/zh/machine-translation/developer-reference/api-alimt-2018-10-12-dir/)
+- [阿里云sts](https://help.aliyun.com/zh/ram/developer-reference/api-reference-5/)
 - [server酱(server_chan)](https://doc.sc3.ft07.com/zh/serverchan3)
-- [deepseek](https://api-docs.deepseek.com/zh-cn/api/deepseek-api)
+- [deepseek](https://api-docs.deepseek.com/zh-cn/api/deepseek-api/)
 
 # 了解如何使用
 
-在项目的`/u-sdk/src/tests/`下有各个模块的测试用例，同时也是各个模块的使用示例。
+在项目的[/u-sdk/src/tests/](https://github.com/ian373/u-sdk/tree/main/u-sdk/tests)下有各个模块的测试用例，同时也是各个模块的使用示例。
 
-各个模块的参数内容和定义，查看上述对应模块的官方API文档。
+各个请求的参数内容和定义，请查看对应模块的官方API文档。
 
 ## server酱举例
 
@@ -53,22 +54,24 @@ async fn server_chan_test() {
 运行测试并查看结果：
 
 ```bash
-cargo test -p u-sdk --all-features server_chan_test -- --show-output
+cargo nextest run --all-features --no-capture --run-ignored=all server_chan_test
 ```
 
 结果：
 
 ```text
+------------
+ Nextest run ID 99a5c68a-d89c-4f56-b4fe-0fd454f1cb5e with nextest profile: default
+    Starting 1 test across 8 binaries (36 tests skipped)
+     Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
+       START (1/1) u-sdk::server_chan server_chan_test
+
 running 1 test
+Message sent successfully
 test server_chan_test ... ok
 
-successes:
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.70s
 
----- server_chan_test stdout ----
-Message sent successfully
-
-
-successes:
-    server_chan_test
-
+        PASS [   1.734s] (1/1) u-sdk::server_chan server_chan_test
+------------
 ```
