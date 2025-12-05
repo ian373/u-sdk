@@ -44,31 +44,31 @@ jobs:
             -   name: Cache cargo/target
                 uses: Swatinem/rust-cache@v2
 
-            # ---------- Dry run：只对需要发布的 crate 做预检查 ----------
+            # ---------- 第一阶段：u-sdk-common（如果需要）----------
 
+            # 先 dry-run u-sdk-common
             -   name: Dry run publish u-sdk-common
                 if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk-common' }}
                 run: cargo publish -p u-sdk-common --dry-run
 
-            -   name: Dry run publish u-sdk
-                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
-                run: cargo publish -p u-sdk --dry-run
-
-            # ---------- 正式发布：根据选择条件执行 ----------
-
-            # 1）先发布 u-sdk-common（如果需要）
+            # 真正发布 u-sdk-common
             -   name: Publish u-sdk-common
                 if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk-common' }}
                 env:
                     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
                 run: cargo publish -p u-sdk-common
 
-            # 只有在“两个都发”的情况下，才需要等索引更新
+            # 如果后面还要发 u-sdk，就等一会儿让 crates.io 索引更新
             -   name: Wait for registry index to update
                 if: ${{ github.event.inputs.target == 'both' }}
                 run: sleep 60
 
-            # 2）再发布 u-sdk（如果需要）
+            # ---------- 第二阶段：u-sdk（如果需要）----------
+
+            -   name: Dry run publish u-sdk
+                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
+                run: cargo publish -p u-sdk --dry-run
+
             -   name: Publish u-sdk
                 if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
                 env:
