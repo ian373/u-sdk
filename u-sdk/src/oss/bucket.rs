@@ -4,10 +4,7 @@
 
 use super::Client;
 use super::sign_v4::HTTPVerb;
-use super::utils::{
-    get_request_header, get_request_header_with_bucket_region, into_request_failed_error,
-    parse_xml_response,
-};
+use super::utils::{get_request_header, into_request_failed_error, parse_xml_response};
 use crate::oss::Error;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
@@ -51,14 +48,21 @@ impl PutBucket<'_> {
         let client = self.client;
         let request_url =
             Url::parse(&format!("https://{}.{}", self.bucket_name, client.endpoint)).unwrap();
-        let req_header_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
+        let mut req_header_map: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
 
-        let header = get_request_header_with_bucket_region(
-            client,
+        let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
             req_header_map,
             &request_url,
             HTTPVerb::Put,
-            &self.client.region,
+            &client.region,
             Some(self.bucket_name),
         );
 
@@ -168,7 +172,21 @@ impl ListObjectsV2<'_> {
         )
         .unwrap();
 
-        let header = get_request_header(client, HashMap::new(), &sign_url, HTTPVerb::Get);
+        let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &sign_url,
+            HTTPVerb::Get,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client
@@ -250,7 +268,21 @@ impl GetBucketInfo<'_> {
         )
         .unwrap();
 
-        let header_map = get_request_header(client, HashMap::new(), &request_url, HTTPVerb::Get);
+        let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Get,
+            &client.region,
+            Some(&client.bucket),
+        );
         let resp = client
             .http_client
             .get(request_url)
@@ -289,7 +321,21 @@ impl GetBucketLocation<'_> {
         )
         .unwrap();
 
-        let header_map = get_request_header(client, HashMap::new(), &request_url, HTTPVerb::Get);
+        let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Get,
+            &client.region,
+            Some(&client.bucket),
+        );
         let resp = client
             .http_client
             .get(request_url)
@@ -345,7 +391,21 @@ impl GetBucketStat<'_> {
         )
         .unwrap();
 
-        let header_map = get_request_header(client, HashMap::new(), &request_url, HTTPVerb::Get);
+        let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
+            &request_url,
+            HTTPVerb::Get,
+            &client.region,
+            Some(&client.bucket),
+        );
 
         let resp = client
             .http_client

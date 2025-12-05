@@ -13,16 +13,18 @@ pub mod region;
 pub mod service;
 
 mod error;
+
 pub use error::Error;
+use std::sync::Arc;
 
 pub(crate) mod sign_v4;
 pub(crate) mod utils;
 
+use crate::credentials::CredentialsProvider;
 use bon::bon;
 
 pub struct Client {
-    access_key_id: String,
-    access_key_secret: String,
+    credentials_provider: Arc<dyn CredentialsProvider>,
     endpoint: String,
     region: String,
     bucket: String,
@@ -35,39 +37,19 @@ impl Client {
     /// region和endpoint：<https://help.aliyun.com/zh/oss/user-guide/regions-and-endpoints>
     #[builder(on(String, into))]
     pub fn new(
-        access_key_id: String,
-        access_key_secret: String,
+        credentials_provider: Arc<dyn CredentialsProvider>,
         endpoint: String,
         region: String,
         bucket: String,
     ) -> Self {
         Self {
-            access_key_id,
-            access_key_secret,
+            credentials_provider,
             endpoint,
             region,
             bucket,
             http_client: reqwest::Client::new(),
         }
     }
-
-    pub fn set_bucket_info(
-        &mut self,
-        bucket: Option<&str>,
-        region: Option<&str>,
-        endpoint: Option<&str>,
-    ) {
-        if let Some(s) = bucket {
-            s.clone_into(&mut self.bucket);
-        }
-        if let Some(s) = region {
-            s.clone_into(&mut self.region);
-        }
-        if let Some(s) = endpoint {
-            s.clone_into(&mut self.endpoint);
-        }
-    }
-
     pub fn bucket(&self) -> &str {
         &self.bucket
     }

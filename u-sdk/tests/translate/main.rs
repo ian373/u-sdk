@@ -1,26 +1,50 @@
 #![cfg(feature = "translate")]
 
 use serde::Deserialize;
+use std::sync::Arc;
+use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
 use u_sdk::translate::*;
 
 #[derive(Deserialize, Debug)]
-pub struct AliConfig {
+struct MTConfig {
     pub access_key_id: String,
     pub access_key_secret: String,
+    pub sts_security_token: Option<String>,
 }
 
-impl AliConfig {
-    pub fn get_conf() -> Self {
-        let file_str = std::fs::read_to_string("tests/translate/config.toml").unwrap();
-        toml::from_str(&file_str).unwrap()
+struct MTCredsProvider {
+    creds: Credentials,
+}
+
+impl MTCredsProvider {
+    fn new(
+        access_key_id: String,
+        access_key_secret: String,
+        sts_security_token: Option<String>,
+    ) -> Self {
+        Self {
+            creds: Credentials::new(access_key_id, access_key_secret, sts_security_token, None),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl CredentialsProvider for MTCredsProvider {
+    async fn load(&self) -> Result<Credentials, CredentialsError> {
+        Ok(self.creds.clone())
     }
 }
 
 fn get_trans_client() -> Client {
-    let conf = AliConfig::get_conf();
+    let conf_str = std::fs::read_to_string("tests/translate/config.toml").unwrap();
+    let conf = toml::from_str::<MTConfig>(&conf_str).unwrap();
+    let provider = MTCredsProvider::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.sts_security_token,
+    );
     Client::builder()
-        .access_key_id(conf.access_key_id)
-        .access_key_secret(conf.access_key_secret)
+        .credentials_provider(Arc::new(provider))
         .host("mt.cn-hangzhou.aliyuncs.com")
         .build()
 }

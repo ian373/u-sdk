@@ -113,7 +113,7 @@ pub struct PostObject<'a> {
 
     // POST v4签名表单元素
     pub(crate) bucket: Option<String>,
-    pub(crate) x_oss_security_token: Option<String>,
+    // x_oss_security_token: 自动添加
     // (min, max)
     pub(crate) content_length_range: Option<(i32, i32)>,
     pub(crate) success_action_status: Option<(String, String)>,
@@ -429,7 +429,7 @@ pub struct GetObject<'a> {
     #[builder(start_fn)]
     pub(crate) client: &'a Client,
 
-    // 请求头
+    // GetObject API的请求头
     pub(crate) range: Option<&'a str>,
     pub(crate) if_modified_since: Option<&'a str>,
     pub(crate) if_unmodified_since: Option<&'a str>,
@@ -437,7 +437,7 @@ pub struct GetObject<'a> {
     pub(crate) if_none_match: Option<&'a str>,
     pub(crate) accept_encoding: Option<&'a str>,
 
-    // 请求参数
+    // GetObject API的请求参数
     pub(crate) response_content_language: Option<&'a str>,
     pub(crate) response_expires: Option<&'a str>,
     pub(crate) response_cache_control: Option<&'a str>,

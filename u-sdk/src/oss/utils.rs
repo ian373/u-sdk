@@ -1,6 +1,5 @@
-use crate::oss::Client;
 use crate::oss::Error;
-use crate::oss::sign_v4::{HTTPVerb, SignV4Param};
+use crate::oss::sign_v4::{HTTPVerb, SignV4Param, generate_v4_signature, sign_v4};
 use base64::{Engine, engine::general_purpose};
 use md5::{Digest, Md5};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -78,7 +77,7 @@ pub(crate) async fn into_request_failed_error(resp: reqwest::Response) -> Error 
 }
 
 // TODO 放到common-lib中供全局使用
-pub(crate) async fn parse_xml_response<T: serde::de::DeserializeOwned>(
+pub(crate) async fn parse_xml_response<T: DeserializeOwned>(
     resp: reqwest::Response,
 ) -> Result<T, Error> {
     let status = resp.status();
@@ -195,9 +194,9 @@ fn validate_object_name_test() {
     assert!(validate_object_name("abc/../def").is_err());
 }
 
-// 少数api需要指定和client不同的region和bucket，使用这个方法进行签名计算，同时也作为签名代码的实现
-pub(crate) fn get_request_header_with_bucket_region(
-    client: &Client,
+pub(crate) fn get_request_header(
+    access_key_id: &str,
+    access_key_secret: &str,
     req_header_map: HashMap<String, String>,
     request_url: &Url,
     http_verb: HTTPVerb,
@@ -229,7 +228,7 @@ pub(crate) fn get_request_header_with_bucket_region(
         additional_header: Some(&additional_header),
         date_time: &now,
     };
-    let authorization = client.sign_v4(sign_v4_param);
+    let authorization = sign_v4(access_key_id, access_key_secret, sign_v4_param);
 
     // 把canonical_header转化为最终的header，补齐剩下的未参与签名计算的header
     // 包括：剩下必要的公共请求头，api header中的非签名字段
@@ -239,23 +238,6 @@ pub(crate) fn get_request_header_with_bucket_region(
     header.insert("Date", &gmt);
     header.extend(remaining_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     into_request_header(header)
-}
-
-// 大部分api的签名都是默认使用client的region和bucket，使用这个方法
-pub(crate) fn get_request_header(
-    client: &Client,
-    req_header_map: HashMap<String, String>,
-    request_url: &Url,
-    http_verb: HTTPVerb,
-) -> HeaderMap {
-    get_request_header_with_bucket_region(
-        client,
-        req_header_map,
-        request_url,
-        http_verb,
-        &client.region,
-        Some(&client.bucket),
-    )
 }
 
 pub(crate) fn get_date_str(data: &time::OffsetDateTime) -> String {
@@ -268,17 +250,22 @@ pub(crate) fn get_date_time_str(data: &time::OffsetDateTime) -> String {
     data.format(&data_time_format).unwrap()
 }
 
-pub(crate) fn generate_presigned_url(
-    client: &Client,
-    header_map: HashMap<String, String>,
-    mut presigned_url: Url,
-    http_verb: HTTPVerb,
-    url_expires: i32,
-) -> String {
-    let (header_map, remaining_map) = partition_header(header_map);
+pub(crate) struct PresignParams<'a> {
+    pub access_key_id: &'a str,
+    pub access_key_secret: &'a str,
+    pub header_map: HashMap<String, String>,
+    pub presigned_url: Url,
+    pub http_verb: HTTPVerb,
+    pub url_expires: i32,
+    pub bucket: &'a str,
+    pub signing_region: &'a str,
+}
+
+pub(crate) fn generate_presigned_url(mut params: PresignParams<'_>) -> String {
+    let (header_map, remaining_map) = partition_header(params.header_map);
     let mut canonical_header = BTreeMap::new();
     canonical_header.extend(header_map.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-    let host = presigned_url.host_str().unwrap().to_owned();
+    let host = params.presigned_url.host_str().unwrap().to_owned();
     canonical_header.insert("host", host.as_str());
 
     let mut additional_header = BTreeSet::new();
@@ -291,20 +278,21 @@ pub(crate) fn generate_presigned_url(
 
     let now = time::OffsetDateTime::now_utc();
     // 添加参与签名计算的query
-    presigned_url
+    params
+        .presigned_url
         .query_pairs_mut()
         .append_pair("x-oss-signature-version", "OSS4-HMAC-SHA256")
         .append_pair(
             "x-oss-credential",
             &format!(
                 "{}/{}/{}/oss/aliyun_v4_request",
-                client.access_key_id,
+                params.access_key_id,
                 &get_date_str(&now),
-                client.region
+                params.signing_region
             ),
         )
         .append_pair("x-oss-date", &get_date_time_str(&now))
-        .append_pair("x-oss-expires", &url_expires.to_string())
+        .append_pair("x-oss-expires", &params.url_expires.to_string())
         .append_pair(
             "x-oss-additional-headers",
             additional_header
@@ -317,22 +305,23 @@ pub(crate) fn generate_presigned_url(
         .finish();
 
     let sign_v4_param = SignV4Param {
-        signing_region: &client.region,
-        http_verb,
-        uri: &presigned_url,
-        bucket: Some(&client.bucket),
+        signing_region: params.signing_region,
+        http_verb: params.http_verb,
+        uri: &params.presigned_url,
+        bucket: Some(params.bucket),
         header_map: &canonical_header,
         additional_header: Some(&additional_header),
         date_time: &now,
     };
-    let signature = client.generate_v4_signature(sign_v4_param);
+    let signature = generate_v4_signature(params.access_key_secret, sign_v4_param);
     // 补上不参与签名计算的query
-    presigned_url
+    params
+        .presigned_url
         .query_pairs_mut()
         .append_pair("x-oss-signature", &signature)
         .finish();
 
-    presigned_url.to_string()
+    params.presigned_url.to_string()
 }
 
 // 将Header分为需要参与签名的Header和剩余Header
@@ -355,8 +344,8 @@ fn partition_header(
 pub(crate) fn parse_get_object_response_header<T: DeserializeOwned>(
     header: &HeaderMap,
 ) -> (T, HashMap<String, String>) {
-    let mut map = Map::with_capacity(30);
-    let mut custom_meta_map = HashMap::with_capacity(30);
+    let mut map = Map::new();
+    let mut custom_meta_map = HashMap::new();
     for (name, val) in header {
         let name_s = name.as_str();
         if let Ok(s) = val.to_str() {

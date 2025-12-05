@@ -1,45 +1,11 @@
-use super::Error;
-use super::utils::{parse_json_response, sign_params};
-use super::{BASE_URL, Client};
-use u_sdk_common::helper::now_iso8601;
-
+use super::utils::parse_json_response;
+use super::{Client, Error, QueryDomainByParamResult};
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use u_sdk_common::helper::into_header_map;
+use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 
-//region response
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct QueryDomainByParamResult {
-    pub page_number: u32,
-    pub page_size: u32,
-    pub request_id: String,
-    pub total_count: u32,
-    #[serde(rename = "data")]
-    pub data: Data,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Data {
-    pub domain: Vec<PerInfo>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct PerInfo {
-    pub cname_auth_status: u8,
-    pub confirm_status: u8,
-    pub create_time: String,
-    pub domain_id: u32,
-    pub domain_name: String,
-    pub domain_status: u8,
-    pub icp_status: u8,
-    pub mx_auth_status: u8,
-    pub spf_auth_status: u8,
-    pub utc_create_time: u64,
-    pub domain_record: String,
-}
-//endregion
-
+#[serde_with::skip_serializing_none]
 #[derive(Builder, Serialize)]
 #[builder(on(String, into))]
 #[serde(rename_all = "PascalCase")]
@@ -48,43 +14,34 @@ pub struct QueryDomainByParam<'a> {
     #[serde(skip_serializing)]
     client: &'a Client,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    key_word: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     page_no: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     page_size: Option<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    key_word: Option<String>,
     status: Option<u8>,
-}
-
-impl Client {
-    pub fn query_domain_by_param(&self) -> QueryDomainByParamBuilder<'_> {
-        QueryDomainByParam::builder(self)
-    }
 }
 
 impl QueryDomainByParam<'_> {
     pub async fn send(&self) -> Result<QueryDomainByParamResult, Error> {
-        let mut map = self.client.known_params.clone();
-        map.insert("Timestamp".to_owned(), now_iso8601());
-        map.insert(
-            "SignatureNonce".to_owned(),
-            uuid::Uuid::new_v4().to_string(),
-        );
-
-        let mut params_map = serde_json::from_value(serde_json::to_value(self).unwrap()).unwrap();
-        map.append(&mut params_map);
-
-        map.insert("Action".to_owned(), "QueryDomainByParam".to_owned());
-        let signature = sign_params(&map, &self.client.access_key_secret);
-        map.insert("Signature".to_owned(), signature);
+        let creds = self.client.credentials_provider.load().await?;
+        let sign_params = SignParams {
+            req_method: "GET",
+            host: &self.client.host,
+            query_map: self,
+            x_acs_action: "QueryDomainByParam",
+            x_acs_version: "2015-11-23",
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &self.client.style,
+        };
+        let (headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let resp = self
             .client
             .http_client
-            .post(BASE_URL)
-            .form(&map)
+            .get(url_)
+            .headers(into_header_map(headers))
             .send()
             .await?;
 

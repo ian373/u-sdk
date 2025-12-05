@@ -1,6 +1,9 @@
 #![cfg(feature = "sts")]
 
+use async_trait::async_trait;
 use serde::Deserialize;
+use std::sync::Arc;
+use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
 use u_sdk::sts;
 use u_sdk::sts::ram_policy::{Effect, Policy, Statement};
 
@@ -8,20 +11,43 @@ use u_sdk::sts::ram_policy::{Effect, Policy, Statement};
 pub struct STSConfig {
     pub access_key_id: String,
     pub access_key_secret: String,
+    pub sts_security_token: Option<String>,
 }
 
-impl STSConfig {
-    pub fn get_conf() -> Self {
-        let file_str = std::fs::read_to_string("tests/sts/config.toml").unwrap();
-        toml::from_str(&file_str).unwrap()
+pub struct STSCredsProvider {
+    creds: Credentials,
+}
+
+impl STSCredsProvider {
+    pub fn new(
+        access_key_id: String,
+        access_key_secret: String,
+        sts_security_token: Option<String>,
+    ) -> Self {
+        Self {
+            creds: Credentials::new(access_key_id, access_key_secret, sts_security_token, None),
+        }
+    }
+}
+
+#[async_trait]
+impl CredentialsProvider for STSCredsProvider {
+    async fn load(&self) -> Result<Credentials, CredentialsError> {
+        Ok(self.creds.clone())
     }
 }
 
 fn get_sts_client() -> sts::Client {
-    let conf = STSConfig::get_conf();
+    let conf_str = std::fs::read_to_string("tests/sts/config.toml").unwrap();
+    let conf = toml::from_str::<STSConfig>(&conf_str).unwrap();
+    let provider = STSCredsProvider::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.sts_security_token,
+    );
+
     sts::Client::builder()
-        .access_key_id(conf.access_key_id)
-        .access_key_secret(conf.access_key_secret)
+        .credentials_provider(Arc::new(provider))
         .host("sts.cn-hangzhou.aliyuncs.com")
         .build()
 }
@@ -51,7 +77,7 @@ async fn assume_role_test() {
     println!("policy json:\n{}", policy.to_json_string_pretty().unwrap());
     let res = client
         .assume_role()
-        .duration_seconds(1000)
+        .duration_seconds(3600)
         .policy(policy)
         .role_arn("xxx")
         .role_session_name("test-session")

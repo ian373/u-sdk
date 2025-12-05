@@ -1,6 +1,6 @@
 use super::Client;
 use super::sign_v4::HTTPVerb;
-use super::utils::parse_xml_response;
+use super::utils::{get_request_header, parse_xml_response};
 use crate::oss::Error;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
@@ -92,13 +92,19 @@ impl ListBuckets<'_> {
         let request_url =
             Url::parse_with_params(&format!("https://{}", client.endpoint), query_map).unwrap();
 
-        let mut request_header_map = HashMap::with_capacity(1);
+        let mut request_header_map = HashMap::new();
         if let Some(s) = self.x_oss_resource_group_id {
             request_header_map.insert("x-oss-resource-group-id".to_owned(), s.to_owned());
         }
 
-        let header_map = super::utils::get_request_header_with_bucket_region(
-            client,
+        let creds = client.credentials_provider.load().await?;
+        if let Some(token) = &creds.sts_security_token {
+            request_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
             request_header_map,
             &request_url,
             HTTPVerb::Get,

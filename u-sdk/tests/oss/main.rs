@@ -3,33 +3,57 @@
 use oss::object::{ObjectToDelete, OssMetaExt, PutObjectBody};
 use serde::Deserialize;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
 use tokio_stream::StreamExt;
+use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
 use u_sdk::oss;
 use u_sdk::oss::object::{CallBackBody, CallbackBodyType, OssCallBack};
 
 #[derive(Deserialize, Debug)]
-pub struct AliConfig {
+pub struct OssConfig {
     pub access_key_id: String,
     pub access_key_secret: String,
     pub endpoint: String,
     pub bucket_name: String,
     pub region: String,
+    pub sts_security_token: Option<String>,
 }
 
-impl AliConfig {
-    pub fn get_conf() -> Self {
-        let file_str = std::fs::read_to_string("tests/oss/config.toml").unwrap();
-        toml::from_str(&file_str).unwrap()
+pub struct OssCredsProvider {
+    creds: Credentials,
+}
+
+impl OssCredsProvider {
+    pub fn new(
+        access_key_id: String,
+        access_key_secret: String,
+        sts_security_token: Option<String>,
+    ) -> Self {
+        Self {
+            creds: Credentials::new(access_key_id, access_key_secret, sts_security_token, None),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl CredentialsProvider for OssCredsProvider {
+    async fn load(&self) -> Result<Credentials, CredentialsError> {
+        Ok(self.creds.clone())
     }
 }
 
 fn get_oss_client() -> oss::Client {
-    let conf = AliConfig::get_conf();
+    let file_str = std::fs::read_to_string("tests/oss/config.toml").unwrap();
+    let conf = toml::from_str::<OssConfig>(&file_str).unwrap();
+    let creds_provider = Arc::new(OssCredsProvider::new(
+        conf.access_key_id,
+        conf.access_key_secret,
+        conf.sts_security_token,
+    ));
     oss::Client::builder()
-        .access_key_id(conf.access_key_id)
-        .access_key_secret(conf.access_key_secret)
+        .credentials_provider(creds_provider)
         .endpoint(conf.endpoint)
         .region(conf.region)
         .bucket(conf.bucket_name)
@@ -69,7 +93,7 @@ async fn put_bucket_test() {
     let client = get_oss_client();
     let res = client
         .put_bucket()
-        .bucket_name("example-to-del")
+        .bucket_name("example-bucket-io")
         .build()
         .send()
         .await;
@@ -185,9 +209,9 @@ async fn put_object_test() {
     }
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn put_object_presigned_url_test() {
+async fn put_object_presigned_url_test() {
     let client = get_oss_client();
     let callback_body = CallBackBody::builder()
         .bucket(true)
@@ -208,7 +232,8 @@ fn put_object_presigned_url_test() {
         .x_metas([("key3", "value3"), ("key4", "value4")])
         .callback(callback)
         .build()
-        .generate_presigned_url("test/k-sample.toml", 300);
+        .generate_presigned_url("test/k-sample.toml", 300)
+        .await;
     /*
     在客户端使用生成的Presigned URL进行 PUT 请求时，
     请求的header中需要包含构建PutObject设置的那些header以及对应的值，如上面的例子中需要指定
@@ -224,9 +249,9 @@ fn put_object_presigned_url_test() {
     println!("res: {:#?}", res);
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn generate_post_object_policy_test() {
+async fn generate_post_object_policy_test() {
     let now = OffsetDateTime::now_utc();
     let client = get_oss_client();
 
@@ -251,7 +276,8 @@ fn generate_post_object_policy_test() {
         .x_metas([("kk2", ("eq", "vv2")), ("kk3", ("starts-with", "vv3"))])
         .callback(callback)
         .build()
-        .generate_policy(now + Duration::from_secs(900));
+        .generate_policy(now + Duration::from_secs(900))
+        .await;
     println!("res: {:#?}", res);
 
     /*
@@ -351,16 +377,17 @@ async fn get_object_by_stream_test() {
     }
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn get_object_presigned_url_test() {
+async fn get_object_presigned_url_test() {
     let client = get_oss_client();
     let res = client
         .get_object()
         .range("bytes=0-99")
         .response_content_language("en-US")
         .build()
-        .generate_presigned_url("test/t-sample.toml", 300);
+        .generate_presigned_url("test/t-sample.toml", 300)
+        .await;
     println!("res: {:#?}", res);
     /*
     使用sdk生成的Presigned URL进行 GET 请求时，
@@ -398,7 +425,7 @@ async fn append_object_test() {
         .x_metas([("key1", "value1"), ("key2", "value2")])
         .content_type("text/plain")
         .build()
-        .send("test/append_object_2.txt", 0, b"6666666".to_vec())
+        .send("test/append_object_7.txt", 0, b"6666666".to_vec())
         .await;
 
     match res {

@@ -27,6 +27,7 @@ impl Client {
 impl Translate<'_> {
     pub async fn send(&self) -> Result<TranslateResponse, Error> {
         let client = self.client;
+        let creds = client.credentials_provider.load().await?;
 
         let mut sign_params = SignParams {
             req_method: "GET",
@@ -34,7 +35,7 @@ impl Translate<'_> {
             query_map: self,
             x_acs_action: "TranslateGeneral",
             x_acs_version: "2018-10-12",
-            x_acs_security_token: self.sts_security_token,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
             request_body: None,
             style: &client.style,
         };
@@ -42,12 +43,9 @@ impl Translate<'_> {
             sign_params.x_acs_action = "Translate";
         }
 
-        let (common_headers, url_) = get_openapi_request_header(
-            &client.access_key_secret,
-            &client.access_key_id,
-            sign_params,
-        )
-        .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
         let resp = client
@@ -65,7 +63,9 @@ impl Translate<'_> {
 impl GetDetectLanguage<'_> {
     pub async fn send(&self) -> Result<String, Error> {
         let client = self.client;
-        let mut query_map = HashMap::with_capacity(1);
+        let creds = client.credentials_provider.load().await?;
+
+        let mut query_map = HashMap::new();
         query_map.insert("SourceText".to_owned(), self.source_text.to_owned());
 
         let sign_params = SignParams {
@@ -74,17 +74,14 @@ impl GetDetectLanguage<'_> {
             query_map: &query_map,
             x_acs_action: "GetDetectLanguage",
             x_acs_version: "2018-10-12",
-            x_acs_security_token: self.sts_security_token,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
             request_body: None,
             style: &client.style,
         };
 
-        let (common_headers, url_) = get_openapi_request_header(
-            &client.access_key_secret,
-            &client.access_key_id,
-            sign_params,
-        )
-        .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| Error::Common(format!("get_common_headers error: {}", e)))?;
 
         let header_map = into_header_map(common_headers);
         let resp = client

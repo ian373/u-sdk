@@ -19,9 +19,6 @@ pub struct AssumeRole<'a> {
     role_session_name: &'a str,
     external_id: Option<&'a str>,
     source_identity: Option<&'a str>,
-    // sts
-    #[serde(skip_serializing)]
-    pub(crate) sts_security_token: Option<&'a str>,
 }
 
 fn policy_as_string<S>(opt: &Option<Policy>, serializer: S) -> Result<S::Ok, S::Error>

@@ -1,7 +1,7 @@
 //! [API 文档](https://help.aliyun.com/zh/oss/developer-reference/describeregions)
 
 use super::Client;
-use super::utils::{get_request_header_with_bucket_region, parse_xml_response};
+use super::utils::{get_request_header, parse_xml_response};
 use crate::oss::Error;
 use crate::oss::sign_v4::HTTPVerb;
 use bon::Builder;
@@ -42,9 +42,16 @@ impl DescribeRegions<'_> {
         )
         .unwrap();
 
-        let header_map = get_request_header_with_bucket_region(
-            client,
-            HashMap::with_capacity(0),
+        let creds = client.credentials_provider.load().await?;
+        let mut req_header_map = HashMap::new();
+        if let Some(token) = &creds.sts_security_token {
+            req_header_map.insert("x-oss-security-token".to_string(), token.clone());
+        }
+
+        let header_map = get_request_header(
+            &creds.access_key_id,
+            &creds.access_key_secret,
+            req_header_map,
             &request_url,
             HTTPVerb::Get,
             &client.region,
