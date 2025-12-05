@@ -3,6 +3,8 @@ members = ["u-sdk", "u-sdk-common"]
 resolver = "2"
 
 [workspace.dependencies]
+u-sdk-common = { version = "0.2.0", path = "u-sdk-common" }
+
 url = "2.5.7"
 percent-encoding = "2.3.2"
 hmac = "0.12.1"

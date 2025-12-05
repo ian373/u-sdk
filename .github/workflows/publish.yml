@@ -1,0 +1,76 @@
+name: Publish crates (u-sdk workspace)
+
+permissions:
+    contents: read
+
+on:
+    # 手动触发，并带一个输入参数：要发布哪个 crate
+    workflow_dispatch:
+        inputs:
+            target:
+                description: "选择要发布的 crate"
+                required: true
+                default: "both"
+                type: choice
+                options:
+                    - both          # 同时发布 u-sdk-common 和 u-sdk
+                    - u-sdk         # 只发布 u-sdk
+                    - u-sdk-common  # 只发布 u-sdk-common
+
+concurrency:
+    group: publish-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+    RUST_BACKTRACE: 1
+
+jobs:
+    publish:
+        name: Publish ${{ github.event.inputs.target }} to crates.io
+        runs-on: ubuntu-latest
+
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v5
+                with:
+                    # 默认情况下（不写 fetch-depth，或写 1）：actions/checkout 会只 clone 当前触发 workflow 的那一次提交 (即一个 shallow clone，只拿最新 commit)
+                    # 当你设 fetch-depth: 0 时，意味着让 checkout 拉取完整的 repository 历史 —— 包括所有 commit、所有分支、所有 tags
+                    fetch-depth: 0
+
+            -   name: Setup Rust (stable)
+                uses: dtolnay/rust-toolchain@stable
+
+            -   name: Cache cargo/target
+                uses: Swatinem/rust-cache@v2
+
+            # ---------- Dry run：只对需要发布的 crate 做预检查 ----------
+
+            -   name: Dry run publish u-sdk-common
+                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk-common' }}
+                run: cargo publish -p u-sdk-common --dry-run
+
+            -   name: Dry run publish u-sdk
+                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
+                run: cargo publish -p u-sdk --dry-run
+
+            # ---------- 正式发布：根据选择条件执行 ----------
+
+            # 1）先发布 u-sdk-common（如果需要）
+            -   name: Publish u-sdk-common
+                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk-common' }}
+                env:
+                    CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+                run: cargo publish -p u-sdk-common
+
+            # 只有在“两个都发”的情况下，才需要等索引更新
+            -   name: Wait for registry index to update
+                if: ${{ github.event.inputs.target == 'both' }}
+                run: sleep 60
+
+            # 2）再发布 u-sdk（如果需要）
+            -   name: Publish u-sdk
+                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
+                env:
+                    CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+                run: cargo publish -p u-sdk
