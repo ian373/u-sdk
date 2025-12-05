@@ -5,6 +5,11 @@
 //!
 //! # Example
 //! ```no_run
+//! use serde::Deserialize;
+//! use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
+//! use u_sdk::oss;
+//! use std::sync::Arc;
+//!
 //! #[derive(Deserialize, Debug)]
 //! pub struct OssConfig {
 //!     pub access_key_id: String,
