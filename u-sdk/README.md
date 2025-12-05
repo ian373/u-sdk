@@ -11,13 +11,13 @@ sdk包含有以下应用部分功能：
 
 # 了解如何使用
 
-在项目的[/u-sdk/src/tests/](https://github.com/ian373/u-sdk/tree/main/u-sdk/tests)下有各个模块的测试用例，同时也是各个模块的使用示例。
+在项目的[u-sdk/u-sdk/tests/](https://github.com/ian373/u-sdk/tree/main/u-sdk/tests)下有各个模块的测试用例，同时也是各个模块的使用示例。
 
 各个请求的参数内容和定义，请查看对应模块的官方API文档。
 
 ## server酱举例
 
-在`u-sdk/tests/server_chan/`目录下创建`config.toml`文件，内容参考同目录下的`config.sample.toml`，并填上真实的内容：
+在`u-sdk/u-sdk/tests/server_chan/`目录下创建`config.toml`文件，内容参考同目录下的`config.sample.toml`，并填上真实的内容：
 
 ```toml
 # config.toml
