@@ -285,7 +285,7 @@ impl PostObject<'_> {
                 bucket: self.bucket,
                 x_oss_signature_version: "OSS4-HMAC-SHA256".to_owned(),
                 x_oss_credential: credential.clone(),
-                x_oss_security_token: creds.sts_security_token,
+                x_oss_security_token: creds.sts_security_token.clone(),
                 x_oss_date: date_time.clone(),
                 content_length_range: self.content_length_range,
                 key: self.key,
