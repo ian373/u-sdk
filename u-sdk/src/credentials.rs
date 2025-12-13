@@ -4,11 +4,12 @@
 //! 所以有些像预签名等api本身是同步的，但是需要用到Credentials的时候，可能需要异步获取Credentials，所以这类操作因此也变为异步的。
 //!
 //! # Example
+//!
 //! ```no_run
 //! use serde::Deserialize;
+//! use std::sync::Arc;
 //! use u_sdk::credentials::{Credentials, CredentialsProvider};
 //! use u_sdk::oss;
-//! use std::sync::Arc;
 //!
 //! #[derive(Deserialize, Debug)]
 //! pub struct OssConfig {
@@ -33,8 +34,10 @@
 //!
 //! #[async_trait::async_trait]
 //! impl CredentialsProvider for OssCredsProvider {
-//!     async fn load(&self) -> Result<Arc<Credentials>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-//!        Ok(Arc::clone(&self.creds))
+//!     async fn load(
+//!         &self,
+//!     ) -> Result<Arc<Credentials>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+//!         Ok(Arc::clone(&self.creds))
 //!     }
 //! }
 //!
