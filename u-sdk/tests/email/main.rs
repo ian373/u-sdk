@@ -1,7 +1,8 @@
 #![cfg(feature = "email")]
 
 use serde::Deserialize;
-use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
+use std::sync::Arc;
+use u_sdk::credentials::{Credentials, CredentialsProvider};
 use u_sdk::email;
 
 #[derive(Deserialize, Debug)]
@@ -13,7 +14,7 @@ struct EmailConfig {
 }
 
 struct EmailCredsProvider {
-    creds: Credentials,
+    creds: Arc<Credentials>,
 }
 
 impl EmailCredsProvider {
@@ -23,15 +24,22 @@ impl EmailCredsProvider {
         sts_security_token: Option<String>,
     ) -> Self {
         Self {
-            creds: Credentials::new(access_key_id, access_key_secret, sts_security_token, None),
+            creds: Arc::new(Credentials::new(
+                access_key_id,
+                access_key_secret,
+                sts_security_token,
+                None,
+            )),
         }
     }
 }
 
 #[async_trait::async_trait]
 impl CredentialsProvider for EmailCredsProvider {
-    async fn load(&self) -> Result<Credentials, CredentialsError> {
-        Ok(self.creds.clone())
+    async fn load(
+        &self,
+    ) -> Result<Arc<Credentials>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        Ok(Arc::clone(&self.creds))
     }
 }
 

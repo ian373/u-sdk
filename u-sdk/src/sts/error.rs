@@ -1,5 +1,3 @@
-use crate::credentials::CredentialsError;
-
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("error: {0}")]
@@ -8,6 +6,6 @@ pub enum Error {
     Reqwest(#[from] reqwest::Error),
     #[error("response status is not success: {status}, text: {text}")]
     RequestAPIFailed { status: String, text: String },
-    #[error("credentials error: {0}")]
-    Credentials(#[from] CredentialsError),
+    #[error("error: {0}")]
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

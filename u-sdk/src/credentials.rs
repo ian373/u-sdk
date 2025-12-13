@@ -4,11 +4,12 @@
 //! 所以有些像预签名等api本身是同步的，但是需要用到Credentials的时候，可能需要异步获取Credentials，所以这类操作因此也变为异步的。
 //!
 //! # Example
+//!
 //! ```no_run
 //! use serde::Deserialize;
-//! use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
-//! use u_sdk::oss;
 //! use std::sync::Arc;
+//! use u_sdk::credentials::{Credentials, CredentialsProvider};
+//! use u_sdk::oss;
 //!
 //! #[derive(Deserialize, Debug)]
 //! pub struct OssConfig {
@@ -20,21 +21,23 @@
 //! }
 //!
 //! pub struct OssCredsProvider {
-//!     creds: Credentials,
+//!     creds: Arc<Credentials>,
 //! }
 //!
 //! impl OssCredsProvider {
 //!     pub fn new(access_key_id: String, access_key_secret: String) -> Self {
 //!         Self {
-//!             creds: Credentials::new(access_key_id, access_key_secret, None, None),
+//!             creds: Credentials::new(access_key_id, access_key_secret, None, None).into(),
 //!         }
 //!     }
 //! }
 //!
 //! #[async_trait::async_trait]
 //! impl CredentialsProvider for OssCredsProvider {
-//!     async fn load(&self) -> Result<Credentials, CredentialsError> {
-//!         Ok(self.creds.clone())
+//!     async fn load(
+//!         &self,
+//!     ) -> Result<Arc<Credentials>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+//!         Ok(Arc::clone(&self.creds))
 //!     }
 //! }
 //!
@@ -54,6 +57,7 @@
 //! }
 //! ```
 
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Clone, Debug)]
@@ -61,6 +65,8 @@ pub struct Credentials {
     pub access_key_id: String,
     pub access_key_secret: String,
     pub sts_security_token: Option<String>,
+    /// 在oss, sts, email等等sdk中没有使用这个字段
+    /// 提供这个字段主要是为了方便用户自行实现CredentialsProvider的时候，可以知道这个Credentials什么时候过期，从而决定是否需要刷新Credentials
     pub expires_at: Option<OffsetDateTime>,
 }
 
@@ -80,14 +86,9 @@ impl Credentials {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum CredentialsError {
-    #[error("failed to load credentials: {0}")]
-    Provider(String),
-    // 后面需要可以再细分，比如网络错误、STS 错误等
-}
-
 #[async_trait::async_trait]
 pub trait CredentialsProvider: Send + Sync {
-    async fn load(&self) -> Result<Credentials, CredentialsError>;
+    async fn load(
+        &self,
+    ) -> Result<Arc<Credentials>, Box<dyn std::error::Error + Send + Sync + 'static>>;
 }

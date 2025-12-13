@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::sync::Arc;
-use u_sdk::credentials::{Credentials, CredentialsError, CredentialsProvider};
+use u_sdk::credentials::{Credentials, CredentialsProvider};
 use u_sdk::sts;
 use u_sdk::sts::ram_policy::{Effect, Policy, Statement};
 
@@ -15,7 +15,7 @@ pub struct STSConfig {
 }
 
 pub struct STSCredsProvider {
-    creds: Credentials,
+    creds: Arc<Credentials>,
 }
 
 impl STSCredsProvider {
@@ -25,15 +25,22 @@ impl STSCredsProvider {
         sts_security_token: Option<String>,
     ) -> Self {
         Self {
-            creds: Credentials::new(access_key_id, access_key_secret, sts_security_token, None),
+            creds: Arc::new(Credentials::new(
+                access_key_id,
+                access_key_secret,
+                sts_security_token,
+                None,
+            )),
         }
     }
 }
 
 #[async_trait]
 impl CredentialsProvider for STSCredsProvider {
-    async fn load(&self) -> Result<Credentials, CredentialsError> {
-        Ok(self.creds.clone())
+    async fn load(
+        &self,
+    ) -> Result<Arc<Credentials>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        Ok(Arc::clone(&self.creds))
     }
 }
 

@@ -1,4 +1,3 @@
-use crate::credentials::CredentialsError;
 use reqwest::StatusCode;
 
 #[derive(thiserror::Error, Debug)]
@@ -9,8 +8,6 @@ pub enum Error {
     API { code: StatusCode, body: String },
     #[error("use reqwest error:\n {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("credentials error: {0}")]
-    Credentials(#[from] CredentialsError),
     #[error("inner error: {0}")]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
