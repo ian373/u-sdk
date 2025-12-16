@@ -168,7 +168,7 @@ impl<'a> PutObject<'a> {
         &self,
         object_name: &str,
         expires: i32,
-    ) -> Result<String, Error> {
+    ) -> Result<PresignedUrlResult, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -230,7 +230,10 @@ impl<'a> PutObject<'a> {
             signing_region: &client.region,
         };
         let signed_url = generate_presigned_url(presigned_params);
-        Ok(signed_url)
+        Ok(PresignedUrlResult {
+            url: signed_url,
+            x_oss_security_token: creds.sts_security_token.clone(),
+        })
     }
 }
 
@@ -320,10 +323,12 @@ impl PostObject<'_> {
 
         Ok(GeneratePolicyResult {
             policy: encoded_policy,
-            signature,
-            date_time,
-            credential,
-            callback_b64,
+            x_oss_signature: signature,
+            x_oss_date: date_time,
+            x_oss_credential: credential,
+            x_oss_signature_version: "OSS4-HMAC-SHA256".to_owned(),
+            x_oss_security_token: creds.sts_security_token.clone(),
+            callback: callback_b64,
             callback_var,
         })
     }
@@ -388,7 +393,7 @@ impl GetObject<'_> {
         &self,
         object_name: &str,
         expires: i32,
-    ) -> Result<String, Error> {
+    ) -> Result<PresignedUrlResult, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -423,7 +428,10 @@ impl GetObject<'_> {
             signing_region: &client.region,
         };
         let signed_url = generate_presigned_url(presigned_params);
-        Ok(signed_url)
+        Ok(PresignedUrlResult {
+            url: signed_url,
+            x_oss_security_token: creds.sts_security_token.clone(),
+        })
     }
 
     async fn get_response(

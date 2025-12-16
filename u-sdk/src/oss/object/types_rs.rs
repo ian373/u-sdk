@@ -377,13 +377,18 @@ where
 
 #[derive(Debug)]
 pub struct GeneratePolicyResult {
+    /// 固定为`OSS4-HMAC-SHA256`
+    pub x_oss_signature_version: String,
+    pub x_oss_credential: String,
+    pub x_oss_date: String,
+    pub x_oss_signature: String,
     /// base64编码后的policy字符串
     pub policy: String,
-    pub signature: String,
-    pub credential: String,
-    pub date_time: String,
-    pub callback_b64: Option<String>,
+    /// base64编码后的callback字符串
+    pub callback: Option<String>,
     pub callback_var: Option<HashMap<String, String>>,
+    /// 如果使用了STS临时密钥，需要在请求头中添加`x-oss-security-token`
+    pub x_oss_security_token: Option<String>,
 }
 
 // endregion
@@ -950,3 +955,10 @@ impl CallBackBody {
     }
 }
 // endregion
+
+#[derive(Debug)]
+pub struct PresignedUrlResult {
+    pub url: String,
+    /// 如果使用了STS临时密钥签名，请求的时候请求头需要添加`x-oss-security-token`
+    pub x_oss_security_token: Option<String>,
+}
