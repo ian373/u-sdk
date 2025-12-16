@@ -960,5 +960,5 @@ impl CallBackBody {
 pub struct PresignedUrlResult {
     pub url: String,
     /// 如果使用了STS临时密钥签名，请求的时候请求头需要添加`x-oss-security-token`
-    pub sts_security_token: Option<String>,
+    pub x_oss_security_token: Option<String>,
 }

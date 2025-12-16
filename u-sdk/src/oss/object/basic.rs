@@ -232,7 +232,7 @@ impl<'a> PutObject<'a> {
         let signed_url = generate_presigned_url(presigned_params);
         Ok(PresignedUrlResult {
             url: signed_url,
-            sts_security_token: creds.sts_security_token.clone(),
+            x_oss_security_token: creds.sts_security_token.clone(),
         })
     }
 }
@@ -430,7 +430,7 @@ impl GetObject<'_> {
         let signed_url = generate_presigned_url(presigned_params);
         Ok(PresignedUrlResult {
             url: signed_url,
-            sts_security_token: creds.sts_security_token.clone(),
+            x_oss_security_token: creds.sts_security_token.clone(),
         })
     }
 
