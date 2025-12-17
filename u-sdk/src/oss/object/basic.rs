@@ -165,10 +165,10 @@ impl<'a> PutObject<'a> {
     /// > 该方式常用于预签名URL上传文件的场景，通过将回调参数Base64编码后拼接在URL中实现自动回调。
     /// > 但由于回调信息暴露在 URL 中，存在一定的安全风险，仅建议用于临时访问或低敏感场景。[callback签名](https://help.aliyun.com/zh/oss/developer-reference/callback)
     ///
-    /// # 注意
-    /// - 在url中包含签名的方式，使用STS的访问方式不需要在header中携带`x-oss-security-token（query参数中已经包含）
-    /// - 如果使用post预签名返回Policy的方式，需要在表单中携带`x-oss-security-token`字段
-    /// - 其它正常的API请求，需要在header中携带`x-oss-security-token`字段
+    /// # 当使用 STS 临时访问凭证时的注意事项
+    /// - 本方法通过在 URL 中包含签名的方式进行授权，如果使用 STS 访问方式，会自动在查询参数中追加 `x-oss-security-token`，因此无需再在 Header 中携带该字段。
+    /// - 如需使用 POST 预签名表单上传，请根据 STS 凭证自行构造表单并在表单中携带 `x-oss-security-token` 字段。
+    /// - 其它正常的 API 请求（非预签名 URL 的方式），需要在 Header 中携带 `x-oss-security-token` 字段。
     pub async fn generate_presigned_url(
         &self,
         object_name: &str,
