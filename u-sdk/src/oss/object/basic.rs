@@ -164,11 +164,16 @@ impl<'a> PutObject<'a> {
     /// 阿里云oss文档不建议使用预签名URL上传带有回调的对象：
     /// > 该方式常用于预签名URL上传文件的场景，通过将回调参数Base64编码后拼接在URL中实现自动回调。
     /// > 但由于回调信息暴露在 URL 中，存在一定的安全风险，仅建议用于临时访问或低敏感场景。[callback签名](https://help.aliyun.com/zh/oss/developer-reference/callback)
+    ///
+    /// # 注意
+    /// - 在url中包含签名的方式，使用STS的访问方式不需要在header中携带`x-oss-security-token（query参数中已经包含）
+    /// - 如果使用post预签名返回Policy的方式，需要在表单中携带`x-oss-security-token`字段
+    /// - 其它正常的API请求，需要在header中携带`x-oss-security-token`字段
     pub async fn generate_presigned_url(
         &self,
         object_name: &str,
         expires: i32,
-    ) -> Result<PresignedUrlResult, Error> {
+    ) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -230,10 +235,7 @@ impl<'a> PutObject<'a> {
             signing_region: &client.region,
         };
         let signed_url = generate_presigned_url(presigned_params);
-        Ok(PresignedUrlResult {
-            url: signed_url,
-            x_oss_security_token: creds.sts_security_token.clone(),
-        })
+        Ok(signed_url)
     }
 }
 
@@ -393,7 +395,7 @@ impl GetObject<'_> {
         &self,
         object_name: &str,
         expires: i32,
-    ) -> Result<PresignedUrlResult, Error> {
+    ) -> Result<String, Error> {
         validate_object_name(object_name)?;
 
         let client = self.client;
@@ -428,10 +430,7 @@ impl GetObject<'_> {
             signing_region: &client.region,
         };
         let signed_url = generate_presigned_url(presigned_params);
-        Ok(PresignedUrlResult {
-            url: signed_url,
-            x_oss_security_token: creds.sts_security_token.clone(),
-        })
+        Ok(signed_url)
     }
 
     async fn get_response(
