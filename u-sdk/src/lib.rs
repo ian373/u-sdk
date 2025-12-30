@@ -19,11 +19,15 @@ pub mod deep_seek;
 #[cfg(feature = "sts")]
 pub mod sts;
 
+#[cfg(feature = "esa")]
+pub mod esa;
+
 /// Credentials related implementations for Aliyun SDKs
 #[cfg(any(
     feature = "email",
     feature = "oss",
     feature = "translate",
-    feature = "sts"
+    feature = "sts",
+    feature = "esa",
 ))]
 pub mod credentials;

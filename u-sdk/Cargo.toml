@@ -22,6 +22,7 @@ translate = []
 server_chan = []
 deep_seek = ["reqwest/stream", "dep:async-stream", "dep:tokio-stream", "dep:bytes"]
 sts = []
+esa = ["time/serde", "time/parsing"]
 
 [dependencies]
 u-sdk-common = { workspace = true }
