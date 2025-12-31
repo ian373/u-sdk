@@ -108,3 +108,17 @@ async fn list_sites_test() {
         .await;
     println!("ListSites Response:\n{:#?}", resp);
 }
+
+#[tokio::test]
+#[ignore]
+async fn get_origin_protection_test() {
+    let client = get_esa_client();
+    let resp = client
+        .get_origin_protection()
+        .site_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("GetOriginProtection Response:\n{:#?}", resp);
+}

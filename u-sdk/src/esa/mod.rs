@@ -1,8 +1,10 @@
 mod error;
-mod site_management;
-mod types_rs;
-
 pub use error::Error;
+
+pub(crate) mod utils;
+
+pub mod origin_protection;
+pub mod site_management;
 
 use crate::credentials::CredentialsProvider;
 use bon::bon;
@@ -28,20 +30,4 @@ impl Client {
             host,
         }
     }
-}
-
-pub async fn parse_json_response<T: serde::de::DeserializeOwned>(
-    resp: reqwest::Response,
-) -> Result<T, Error> {
-    let status = resp.status();
-
-    if !status.is_success() {
-        return Err(Error::RequestAPIFailed {
-            code: status.to_string(),
-            message: resp.text().await?,
-        });
-    }
-
-    let data = resp.json().await?;
-    Ok(data)
 }

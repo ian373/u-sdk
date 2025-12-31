@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- 添加 ESA 模块，实现 `ListSites`功能
+- 添加 ESA 模块，实现 `ListSites`, `GetOriginProtection` 功能
 
 ## [0.6.1] - 2025-12-17
 
