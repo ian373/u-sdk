@@ -1,3 +1,5 @@
+//! ESA SDK
+
 mod error;
 pub use error::Error;
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use u_sdk::credentials::{Credentials, CredentialsProvider};
 use u_sdk::esa;
 
+//region client
 #[derive(Deserialize, Debug)]
 struct Config {
     access_key_id: String,
@@ -93,6 +94,7 @@ fn get_esa_client() -> esa::Client {
         .host("esa.cn-hangzhou.aliyuncs.com")
         .build()
 }
+//endregion
 
 #[tokio::test]
 #[ignore]
@@ -120,4 +122,18 @@ async fn get_origin_protection_test() {
         .await;
 
     println!("GetOriginProtection Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn update_origin_protection_ip_white_list_test() {
+    let client = get_esa_client();
+    let resp = client
+        .update_origin_protection_ip_white_list()
+        .site_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("UpdateOriginProtectionIpWhiteList Response:\n{:#?}", resp);
 }

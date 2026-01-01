@@ -6,6 +6,18 @@ use std::collections::HashMap;
 use u_sdk_common::helper::into_header_map;
 use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 
+impl Client {
+    pub fn get_origin_protection(&self) -> GetOriginProtectionBuilder<'_> {
+        GetOriginProtection::builder(self)
+    }
+
+    pub fn update_origin_protection_ip_white_list(
+        &self,
+    ) -> UpdateOriginProtectionIpWhiteListBuilder<'_> {
+        UpdateOriginProtectionIpWhiteList::builder(self)
+    }
+}
+
 // region GetOriginProtection request
 /// [GetOriginProtection](https://help.aliyun.com/zh/edge-security-acceleration/esa/api-esa-2024-09-10-getoriginprotection)
 #[derive(Builder)]
@@ -104,12 +116,6 @@ pub enum Switch {
 }
 // endregion
 
-impl Client {
-    pub fn get_origin_protection(&self) -> GetOriginProtectionBuilder<'_> {
-        GetOriginProtection::builder(self)
-    }
-}
-
 impl GetOriginProtection<'_> {
     pub async fn send(&self) -> Result<GetOriginProtectionResponse, Error> {
         let client = self.client;
@@ -136,6 +142,56 @@ impl GetOriginProtection<'_> {
         let resp = client
             .http_client
             .get(url_)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let data = parse_json_response(resp).await?;
+        Ok(data)
+    }
+}
+
+/// [UpdateOriginProtectionIpWhiteList](https://help.aliyun.com/zh/edge-security-acceleration/esa/api-esa-2024-09-10-updateoriginprotectionipwhitelist)
+#[derive(Builder)]
+pub struct UpdateOriginProtectionIpWhiteList<'a> {
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+    /// 站点 ID，可通过调用 ListSites 接口获取。
+    pub(crate) site_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct UpdateOriginProtectionIpWhiteListResponse {
+    pub request_id: String,
+}
+
+impl UpdateOriginProtectionIpWhiteList<'_> {
+    pub async fn send(&self) -> Result<UpdateOriginProtectionIpWhiteListResponse, Error> {
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
+
+        let sign_params = SignParams {
+            req_method: "POST",
+            host: &client.host,
+            query_map: HashMap::from([("SiteId", self.site_id.to_string())]),
+            x_acs_action: "UpdateOriginProtectionIpWhiteList",
+            x_acs_version: OPENAPI_VERSION,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &OPENAPI_STYLE,
+        };
+
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| {
+                    Error::Common(format!("failed to get openapi request header: {}", e))
+                })?;
+        let header_map = into_header_map(common_headers);
+
+        let resp = client
+            .http_client
+            .post(url_)
             .headers(header_map)
             .send()
             .await?;
