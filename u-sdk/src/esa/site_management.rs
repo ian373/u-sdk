@@ -1,7 +1,7 @@
 use super::utils::{de_option_empty_string_as_none, parse_json_response};
 use super::{Client, Error, OPENAPI_STYLE, OPENAPI_VERSION};
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use time::OffsetDateTime;
 use u_sdk_common::helper::into_header_map;
@@ -17,13 +17,16 @@ pub struct ListSites<'a> {
     #[serde(skip_serializing)]
     pub(crate) client: &'a Client,
 
-    /// 标签过滤规则。
+    /// 标签过滤规则。 (Key, Value)
     #[builder(field)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    tag_filter: Vec<TagFilterItem>,
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "serialize_tag_filter_as_json_string"
+    )]
+    tag_filter: Vec<(Option<&'a str>, Option<&'a str>)>,
 
     /// 站点名称。用于查询的过滤条件。
-    site_name: Option<String>,
+    site_name: Option<&'a str>,
 
     /// 站点名称的搜索匹配模式。默认为精确匹配。
     site_search_type: Option<SiteSearchType>,
@@ -35,10 +38,10 @@ pub struct ListSites<'a> {
     page_size: Option<i32>,
 
     /// 资源组 ID。用于查询的过滤条件。
-    resource_group_id: Option<String>,
+    resource_group_id: Option<&'a str>,
 
     /// 站点状态。用于查询的过滤条件。
-    status: Option<String>,
+    status: Option<&'a str>,
 
     /// 仅企业版，传 true 时代表仅查询企业版的站点。
     only_enterprise: Option<bool>,
@@ -56,28 +59,50 @@ pub struct ListSites<'a> {
     order_by: Option<OrderBy>,
 }
 
-impl<S: list_sites_builder::State> ListSitesBuilder<'_, S> {
+impl<'a, S: list_sites_builder::State> ListSitesBuilder<'a, S> {
     /// 添加标签过滤规则
-    pub fn tag_filter(mut self, item: TagFilterItem) -> Self {
+    pub fn tag_filter(mut self, item: (Option<&'a str>, Option<&'a str>)) -> Self {
         self.tag_filter.push(item);
         self
     }
 
     /// 批量添加标签过滤规则
-    pub fn tag_filters(mut self, items: impl IntoIterator<Item = TagFilterItem>) -> Self {
+    pub fn tag_filters(
+        mut self,
+        items: impl IntoIterator<Item = (Option<&'a str>, Option<&'a str>)>,
+    ) -> Self {
         self.tag_filter.extend(items);
         self
     }
 }
 
-/// TagFilter 数组里的 object
-#[derive(Serialize, Clone)]
+#[serde_with::skip_serializing_none]
+#[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct TagFilterItem {
-    /// 标签键，用于查询的过滤条件。
-    pub key: Option<String>,
-    /// 标签值，用于查询的过滤条件。
-    pub value: Option<String>,
+struct TagFilterItem<'a> {
+    key: Option<&'a str>,
+    value: Option<&'a str>,
+}
+
+pub fn serialize_tag_filter_as_json_string<'a, S>(
+    tag_filter: &Vec<(Option<&'a str>, Option<&'a str>)>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    // 过滤掉 (None, None)，避免出现 "{}"
+    let items: Vec<TagFilterItem<'a>> = tag_filter
+        .iter()
+        .filter(|(k, v)| k.is_some() || v.is_some())
+        .map(|(k, v)| TagFilterItem { key: *k, value: *v })
+        .collect();
+
+    // 生成 JSON 字符串
+    let json = serde_json::to_string(&items).map_err(serde::ser::Error::custom)?;
+
+    // 按“字符串”序列化出去
+    serializer.serialize_str(&json)
 }
 
 /// 站点名称搜索匹配模式：prefix/suffix/exact/fuzzy

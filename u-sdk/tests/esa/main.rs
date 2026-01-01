@@ -100,9 +100,8 @@ async fn list_sites_test() {
     let client = get_esa_client();
     let resp = client
         .list_sites()
-        .site_name("example.com".to_string())
-        .page_number(1)
-        .page_size(10)
+        .site_name("example.com")
+        .tag_filter((Some("123"), Some("123")))
         .build()
         .send()
         .await;
