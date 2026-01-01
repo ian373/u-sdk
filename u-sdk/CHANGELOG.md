@@ -5,13 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- 添加 ESA 模块，实现 `ListSites`, `GetOriginProtection`, `UpdateOriginProtectionIpWhiteList` 功能
+
 ## [0.6.1] - 2025-12-17
 
 ### Fixed
 
 [oss]
 
-- `PostObject`生成Policy部分，在返回中添加必要的`sts security token`，前端才能顺利使用临时凭证进行请求
+- `PostObject` 生成Policy部分，在返回中添加必要的`sts security token`，前端才能顺利使用临时凭证进行请求
 
 ## [0.5.0] - 2025-12-13
 
@@ -32,13 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [oss]
 
-- 添加`GetObject`预签名URL的方法
-- 添加`PutObject`预签名URL的方法
-- 添加`PostObject`获取签名信息的方法
-- 添加`PutObject`的callback的功能
-- 添加`PostObject`获取签名信息时携带callback的功能
-- 添加`PutObject`生成预签名时携带callback的功能
-- 为现有方法添加sts临时凭证支持
+- 添加 `GetObject` 预签名URL的方法
+- 添加 `PutObject` 预签名URL的方法
+- 添加 `PostObject` 获取签名信息的方法
+- 添加 `PutObject` 的callback的功能
+- 添加 `PostObject` 获取签名信息时携带callback的功能
+- 添加 `PutObject` 生成预签名时携带callback的功能
+- 为现有方法添加 sts 临时凭证支持
 
 [sts]
 
