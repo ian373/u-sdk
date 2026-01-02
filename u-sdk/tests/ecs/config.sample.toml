@@ -1,0 +1,5 @@
+# sts assume role access key id
+access_key_id = "testid"
+# sts assume role access key secret
+access_key_secret = "secret"
+role_arn = "acs:ram::123456789012:role/testrole"

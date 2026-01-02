@@ -22,6 +22,9 @@ pub mod sts;
 #[cfg(feature = "esa")]
 pub mod esa;
 
+#[cfg(feature = "ecs")]
+pub mod ecs;
+
 /// Credentials related implementations for Aliyun SDKs
 #[cfg(any(
     feature = "email",
@@ -29,5 +32,6 @@ pub mod esa;
     feature = "translate",
     feature = "sts",
     feature = "esa",
+    feature = "ecs",
 ))]
 pub mod credentials;
