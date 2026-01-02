@@ -110,3 +110,20 @@ async fn describe_prefix_list_attributes_test() {
 
     println!("res:\n{:#?}", resp);
 }
+
+#[tokio::test]
+#[ignore]
+async fn modify_prefix_list_test() {
+    let client = get_ecs_client();
+    let resp = client
+        .modify_prefix_list()
+        .region_id("cn-hangzhou")
+        .prefix_list_id("pl-xxx")
+        .add_entry("192.168.8.1/32", None)
+        .remove_entry("10.0.0.0/8")
+        .build()
+        .send()
+        .await;
+
+    println!("res:\n{:#?}", resp);
+}
