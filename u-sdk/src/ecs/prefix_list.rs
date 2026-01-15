@@ -214,14 +214,14 @@ impl<'a, S: modify_prefix_list_builder::State> ModifyPrefixListBuilder<'a, S> {
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct AddEntryItem<'a> {
-    cidr: &'a Cow<'a, str>,
+    cidr: Cow<'a, str>,
     description: Option<&'a str>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct RemoveEntryItem<'a> {
-    cidr: &'a Cow<'a, str>,
+    cidr: Cow<'a, str>,
 }
 
 fn serialize_add_entry<S>(
@@ -234,7 +234,7 @@ where
     let add_entry_items: Vec<AddEntryItem> = items
         .iter()
         .map(|(cidr, description)| AddEntryItem {
-            cidr,
+            cidr: Cow::Borrowed(cidr.as_ref()),
             description: *description,
         })
         .collect();
@@ -245,8 +245,12 @@ fn serialize_remove_entry<S>(items: &[Cow<str>], serializer: S) -> Result<S::Ok,
 where
     S: serde::Serializer,
 {
-    let remove_entry_items: Vec<RemoveEntryItem> =
-        items.iter().map(|cidr| RemoveEntryItem { cidr }).collect();
+    let remove_entry_items: Vec<RemoveEntryItem> = items
+        .iter()
+        .map(|cidr| RemoveEntryItem {
+            cidr: Cow::Borrowed(cidr.as_ref()),
+        })
+        .collect();
     remove_entry_items.serialize(serializer)
 }
 
