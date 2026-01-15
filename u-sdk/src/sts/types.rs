@@ -4,6 +4,16 @@ use bon::Builder;
 use serde::{Deserialize, Serialize, Serializer};
 
 /// [AssumRole API](https://help.aliyun.com/zh/ram/developer-reference/api-sts-2015-04-01-assumerole)
+///
+/// 官方文档关于调用 AssumeRole 需要：
+///
+/// | 操作 | 访问级别 | 资源类型 | 条件关键字 | 关联操作 |
+/// | ---- | -------- | -------- | ---------- | -------- |
+/// | AssumeRole | get | *Role<br>acs:ram::{#accountId}:role/{#RoleName} | sts:SourceIdentity | sts:SetSourceIdentity |
+///
+/// 经过测试，这个操作的调用不需要关联操作`sts:SetSourceIdentity`，单独的`sts:AssumeRole`权限即可调用成功。
+///
+/// 而且系统的`权限策略`中，有`AliyunSTSAssumeRoleAccess`，自己也只是开启了`sts:AssumeRole`
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Builder)]
 #[serde(rename_all = "PascalCase")]

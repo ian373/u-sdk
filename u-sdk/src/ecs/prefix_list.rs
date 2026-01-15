@@ -3,6 +3,7 @@ use super::parse_json_response;
 use super::{Error, OPENAPI_STYLE, OPENAPI_VERSION};
 use bon::Builder;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use time::OffsetDateTime;
 use u_sdk_common::helper::into_header_map;
 use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
@@ -112,13 +113,13 @@ pub struct ModifyPrefixList<'a> {
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "serialize_add_entry"
     )]
-    add_entry: Vec<(&'a str, Option<&'a str>)>,
+    add_entry: Vec<(Cow<'a, str>, Option<&'a str>)>,
     #[builder(field)]
     #[serde(
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "serialize_remove_entry"
     )]
-    remove_entry: Vec<&'a str>,
+    remove_entry: Vec<Cow<'a, str>>,
 
     region_id: &'a str,
     prefix_list_id: &'a str,
@@ -127,29 +128,84 @@ pub struct ModifyPrefixList<'a> {
 }
 
 impl<'a, S: modify_prefix_list_builder::State> ModifyPrefixListBuilder<'a, S> {
-    pub fn add_entry(mut self, cidr: &'a str, description: Option<&'a str>) -> Self {
-        self.add_entry.push((cidr, description));
+    pub fn add_entry(
+        mut self,
+        cidr: impl Into<Cow<'a, str>>,
+        description: Option<&'a str>,
+    ) -> Self {
+        self.add_entry.push((cidr.into(), description));
         self
     }
 
-    pub fn add_entries<I>(mut self, items: I) -> Self
+    /// 如果cidr为None，则不添加该条目，此时description参数会被忽略
+    pub fn maybe_add_entry(
+        mut self,
+        cidr: Option<impl Into<Cow<'a, str>>>,
+        description: Option<&'a str>,
+    ) -> Self {
+        if let Some(cidr) = cidr {
+            self.add_entry.push((cidr.into(), description));
+        }
+        self
+    }
+
+    pub fn add_entries<I, C>(mut self, items: I) -> Self
     where
-        I: IntoIterator<Item = (&'a str, Option<&'a str>)>,
+        I: IntoIterator<Item = (C, Option<&'a str>)>,
+        C: Into<Cow<'a, str>>,
     {
-        self.add_entry.extend(items);
+        self.add_entry.extend(
+            items
+                .into_iter()
+                .map(|(cidr, description)| (cidr.into(), description)),
+        );
         self
     }
 
-    pub fn remove_entry(mut self, cidr: &'a str) -> Self {
-        self.remove_entry.push(cidr);
-        self
-    }
-
-    pub fn remove_entries<I>(mut self, items: I) -> Self
+    pub fn maybe_add_entries<I, C>(mut self, items: Option<I>) -> Self
     where
-        I: IntoIterator<Item = &'a str>,
+        I: IntoIterator<Item = (C, Option<&'a str>)>,
+        C: Into<Cow<'a, str>>,
     {
-        self.remove_entry.extend(items);
+        if let Some(items) = items {
+            self.add_entry.extend(
+                items
+                    .into_iter()
+                    .map(|(cidr, description)| (cidr.into(), description)),
+            );
+        }
+        self
+    }
+
+    pub fn remove_entry(mut self, cidr: impl Into<Cow<'a, str>>) -> Self {
+        self.remove_entry.push(cidr.into());
+        self
+    }
+
+    pub fn maybe_remove_entry(mut self, cidr: Option<impl Into<Cow<'a, str>>>) -> Self {
+        if let Some(cidr) = cidr {
+            self.remove_entry.push(cidr.into());
+        }
+        self
+    }
+
+    pub fn remove_entries<I, C>(mut self, items: I) -> Self
+    where
+        I: IntoIterator<Item = C>,
+        C: Into<Cow<'a, str>>,
+    {
+        self.remove_entry.extend(items.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn maybe_remove_entries<I, C>(mut self, items: Option<I>) -> Self
+    where
+        I: IntoIterator<Item = C>,
+        C: Into<Cow<'a, str>>,
+    {
+        if let Some(items) = items {
+            self.remove_entry.extend(items.into_iter().map(Into::into));
+        }
         self
     }
 }
@@ -158,18 +214,18 @@ impl<'a, S: modify_prefix_list_builder::State> ModifyPrefixListBuilder<'a, S> {
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct AddEntryItem<'a> {
+    cidr: Cow<'a, str>,
     description: Option<&'a str>,
-    cidr: &'a str,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct RemoveEntryItem<'a> {
-    cidr: &'a str,
+    cidr: Cow<'a, str>,
 }
 
 fn serialize_add_entry<S>(
-    items: &Vec<(&str, Option<&str>)>,
+    items: &[(Cow<str>, Option<&str>)],
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
@@ -178,19 +234,23 @@ where
     let add_entry_items: Vec<AddEntryItem> = items
         .iter()
         .map(|(cidr, description)| AddEntryItem {
-            cidr,
+            cidr: Cow::Borrowed(cidr.as_ref()),
             description: *description,
         })
         .collect();
     add_entry_items.serialize(serializer)
 }
 
-fn serialize_remove_entry<S>(items: &Vec<&str>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_remove_entry<S>(items: &[Cow<str>], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    let remove_entry_items: Vec<RemoveEntryItem> =
-        items.iter().map(|cidr| RemoveEntryItem { cidr }).collect();
+    let remove_entry_items: Vec<RemoveEntryItem> = items
+        .iter()
+        .map(|cidr| RemoveEntryItem {
+            cidr: Cow::Borrowed(cidr.as_ref()),
+        })
+        .collect();
     remove_entry_items.serialize(serializer)
 }
 
