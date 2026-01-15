@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-01-15
+
 ### Added
 
 - 添加 ESA 模块，实现 `ListSites`, `GetOriginProtection`, `UpdateOriginProtectionIpWhiteList` 功能
 - 添加 ECS 模块，实现 `DescribePrefixListAttributes`, `ModifyPrefixList` 功能
+
+### Changed
+
+- 更新了一些方法的文档
 
 ## [0.6.1] - 2025-12-17
 
