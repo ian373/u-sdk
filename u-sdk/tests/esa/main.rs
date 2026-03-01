@@ -151,3 +151,17 @@ async fn list_records_test() {
 
     println!("ListRecords Response:\n{:#?}", resp);
 }
+
+#[tokio::test]
+#[ignore]
+async fn get_record_test() {
+    let client = get_esa_client();
+    let resp = client
+        .get_record()
+        .record_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("GetRecord Response:\n{:#?}", resp);
+}

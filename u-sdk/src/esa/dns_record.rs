@@ -1,4 +1,4 @@
-use super::utils::{de_option_empty_string_as_none, parse_json_response};
+use super::utils::{de_non_empty_object, de_option_empty_string_as_none, parse_json_response};
 use super::{Error, OPENAPI_STYLE, OPENAPI_VERSION};
 use crate::esa::Client;
 use bon::Builder;
@@ -11,6 +11,10 @@ use u_sdk_common::open_api_sign::{SignParams, get_openapi_request_header};
 impl Client {
     pub fn list_records(&self) -> ListRecordsBuilder<'_> {
         ListRecords::builder(self)
+    }
+
+    pub fn get_record(&self) -> GetRecordBuilder<'_> {
+        GetRecord::builder(self)
     }
 }
 
@@ -183,7 +187,10 @@ pub struct DnsRecord {
     pub comment: String,
 
     /// CNAME 记录的源站鉴权信息
-    pub auth_conf: AuthConf,
+    // 在 ListRecords 接口中，鉴权信息在没有时会返回空对象 `{}`;
+    // 在 GetRecord 接口中，鉴权信息在没有时不存在该字段。使用 `de_non_empty_object` + default 处理这两种情况
+    #[serde(default, deserialize_with = "de_non_empty_object")]
+    pub auth_conf: Option<AuthConf>,
 
     /// 回源 HOST 策略
     #[serde(deserialize_with = "de_option_empty_string_as_none")]
@@ -244,19 +251,19 @@ pub struct DnsData {
 #[derive(Debug, Deserialize)]
 pub struct AuthConf {
     /// 鉴权类型
-    pub auth_type: Option<AuthType>,
+    pub auth_type: AuthType,
 
     /// 访问密钥
-    pub access_key: Option<String>,
+    pub access_key: String,
 
     /// 秘密访问密钥
-    pub secret_key: Option<String>,
+    pub secret_key: String,
 
     /// 签名版本
-    pub version: Option<String>,
+    pub version: String,
 
     /// 区域
-    pub region: Option<String>,
+    pub region: String,
 }
 
 /// 鉴权类型
@@ -312,3 +319,55 @@ impl ListRecords<'_> {
     }
 }
 //endregion
+
+// region GetRecord request
+/// [GetRecord](https://help.aliyun.com/zh/edge-security-acceleration/esa/api-esa-2024-09-10-getrecord)
+#[derive(Builder, Debug)]
+pub struct GetRecord<'a> {
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+    pub(crate) record_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct GetRecordResponse {
+    pub request_id: String,
+    pub record_model: DnsRecord,
+}
+
+impl GetRecord<'_> {
+    pub async fn send(&self) -> Result<GetRecordResponse, Error> {
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
+
+        let sign_params = SignParams {
+            req_method: "GET",
+            host: &client.host,
+            query_map: HashMap::from([("RecordId", self.record_id)]),
+            x_acs_action: "GetRecord",
+            x_acs_version: OPENAPI_VERSION,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &OPENAPI_STYLE,
+        };
+
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| {
+                    Error::Common(format!("failed to get openapi request header: {}", e))
+                })?;
+        let header_map = into_header_map(common_headers);
+
+        let resp = client
+            .http_client
+            .get(url_)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let data = parse_json_response(resp).await?;
+        Ok(data)
+    }
+}
+// endregion
