@@ -137,3 +137,17 @@ async fn update_origin_protection_ip_white_list_test() {
 
     println!("UpdateOriginProtectionIpWhiteList Response:\n{:#?}", resp);
 }
+
+#[tokio::test]
+#[ignore]
+async fn list_records_test() {
+    let client = get_esa_client();
+    let resp = client
+        .list_records()
+        .site_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("ListRecords Response:\n{:#?}", resp);
+}

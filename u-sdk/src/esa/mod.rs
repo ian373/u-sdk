@@ -1,10 +1,13 @@
 //! ESA SDK
 
 mod error;
+
 pub use error::Error;
+use std::fmt::{Debug, Formatter};
 
 pub(crate) mod utils;
 
+pub mod dns_record;
 pub mod origin_protection;
 pub mod site_management;
 
@@ -20,6 +23,12 @@ pub struct Client {
     credentials_provider: Arc<dyn CredentialsProvider>,
     http_client: reqwest::Client,
     host: String,
+}
+
+impl Debug for Client {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client").field("host", &self.host).finish()
+    }
 }
 
 #[bon]
