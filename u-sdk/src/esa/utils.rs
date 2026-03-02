@@ -1,11 +1,9 @@
 use super::Error;
-use serde::de::IntoDeserializer;
+use serde::de::{DeserializeOwned, IntoDeserializer};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-pub async fn parse_json_response<T: serde::de::DeserializeOwned>(
-    resp: reqwest::Response,
-) -> Result<T, Error> {
+pub async fn parse_json_response<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T, Error> {
     let status = resp.status();
 
     if !status.is_success() {
@@ -50,7 +48,7 @@ where
 pub fn de_non_empty_object<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
-    T: for<'a> Deserialize<'a>,
+    T: DeserializeOwned,
 {
     let value = Value::deserialize(deserializer)?;
     match value {
@@ -72,6 +70,6 @@ where
     T: Serialize,
     S: Serializer,
 {
-    let json_str = serde_json::to_string(&value).map_err(serde::ser::Error::custom)?;
+    let json_str = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
     serializer.serialize_str(&json_str)
 }

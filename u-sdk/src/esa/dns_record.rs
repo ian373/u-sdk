@@ -1,8 +1,8 @@
+use super::Client;
 use super::utils::{
     de_non_empty_object, de_option_empty_string_as_none, parse_json_response, se_as_json_string,
 };
 use super::{Error, OPENAPI_STYLE, OPENAPI_VERSION};
-use crate::esa::Client;
 use bon::Builder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
