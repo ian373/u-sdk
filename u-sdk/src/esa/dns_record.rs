@@ -1,4 +1,6 @@
-use super::utils::{de_non_empty_object, de_option_empty_string_as_none, parse_json_response};
+use super::utils::{
+    de_non_empty_object, de_option_empty_string_as_none, parse_json_response, se_as_json_string,
+};
 use super::{Error, OPENAPI_STYLE, OPENAPI_VERSION};
 use crate::esa::Client;
 use bon::Builder;
@@ -15,6 +17,10 @@ impl Client {
 
     pub fn get_record(&self) -> GetRecordBuilder<'_> {
         GetRecord::builder(self)
+    }
+
+    pub fn create_record(&self) -> CreateRecordBuilder<'_> {
+        CreateRecord::builder(self)
     }
 }
 
@@ -96,24 +102,19 @@ pub enum BizName {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum DnsRecordType {
-    A,    // A 记录，映射域名到 IP 地址
-    AAAA, // AAAA 记录，IPv6 地址记录
     #[serde(rename = "A/AAAA")]
     AOrAAAA, // A 或 AAAA 记录，自动选择 IPv4 或 IPv6 地址
-    CNAME, // CNAME 记录，域名的别名
-    MX,   // MX 记录，邮件交换记录
-    TXT,  // TXT 记录，文本记录
-    NS,   // NS 记录，域名服务器记录
-    PTR,  // PTR 记录，反向 DNS 记录
-    SOA,  // SOA 记录，授权记录
-    SRV,  // SRV 记录，服务定位记录
-    CAA,  // CAA 记录，证书颁发机构授权记录
-    NAPTR, // NAPTR 记录，命名授权指针
-    LOC,  // LOC 记录，地理位置信息记录
-    HINFO, // HINFO 记录，主机信息记录
-    RP,   // RP 记录，责任人记录
-    TKEY, // TKEY 记录，事务密钥记录
-    TSIG, // TSIG 记录，事务签名记录
+    CNAME,  // CNAME 记录，域名的别名
+    MX,     // MX 记录，邮件交换记录
+    TXT,    // TXT 记录，文本记录
+    NS,     // NS 记录，域名服务器记录
+    SRV,    // SRV 记录，服务定位记录
+    CAA,    // CAA 记录，证书颁发机构授权记录
+    CERT,   // CERT 记录，证书记录
+    SMIMEA, // SMIMEA 记录，S/MIME 证书记录
+    SSHFP,  // SSHFP 记录，SSH 公钥指纹记录
+    TLSA,   // TLSA 记录，TLS 认证记录
+    URI,    // URI 记录，统一资源标识记录
 }
 
 /// 请求返回参数
@@ -248,26 +249,26 @@ pub struct DnsData {
 }
 
 /// CNAME 记录的源站鉴权信息
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AuthConf {
     /// 鉴权类型
-    pub auth_type: AuthType,
+    pub auth_type: Option<AuthType>,
 
     /// 访问密钥
-    pub access_key: String,
+    pub access_key: Option<String>,
 
     /// 秘密访问密钥
-    pub secret_key: String,
+    pub secret_key: Option<String>,
 
     /// 签名版本
-    pub version: String,
+    pub version: Option<String>,
 
     /// 区域
-    pub region: String,
+    pub region: Option<String>,
 }
 
 /// 鉴权类型
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthType {
     Public,              // 公共读
@@ -277,7 +278,7 @@ pub enum AuthType {
 }
 
 /// 回源 HOST 策略
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostPolicy {
     FollowHostname,     // 跟随请求 HOST
@@ -362,6 +363,141 @@ impl GetRecord<'_> {
         let resp = client
             .http_client
             .get(url_)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let data = parse_json_response(resp).await?;
+        Ok(data)
+    }
+}
+// endregion
+
+// region CreateRecord
+/// [CreateRecord](https://help.aliyun.com/zh/edge-security-acceleration/esa/api-esa-2024-09-10-createrecord)
+#[serde_with::skip_serializing_none]
+#[derive(Builder, Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CreateRecord<'a> {
+    #[serde(skip_serializing)]
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+
+    site_id: i64,
+    record_name: &'a str,
+
+    /// 只有 CNAME 或 A/AAAA 记录可开启；true/false
+    proxied: Option<bool>,
+
+    /// DNS 记录类型：A/AAAA、CNAME、TXT 等
+    r#type: DnsRecordType,
+
+    /// 仅 CNAME 添加时要求填写；不传默认 Domain
+    source_type: Option<SourceType>,
+
+    /// proxied=true 时必填；proxied=false 时不需要
+    biz_name: Option<BizName>,
+
+    ttl: u32,
+
+    #[serde(serialize_with = "se_as_json_string")]
+    data: RecordData<'a>,
+
+    /// 备注，最大 100 字符
+    comment: Option<&'a str>,
+
+    /// CNAME 源站鉴权信息（主要用于 SourceType=OSS/S3 等场景）
+    auth_conf: Option<AuthConf>,
+
+    /// 回源 HOST 策略，仅 CNAME 生效
+    host_policy: Option<HostPolicy>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Serialize, Builder)]
+#[serde(rename_all = "PascalCase")]
+pub struct RecordData<'a> {
+    /// A/AAAA, CNAME, NS, MX, TXT, CAA, SRV, URI 时必填（含义随 type 变化）
+    value: Option<&'a str>,
+
+    /// MX, SRV, URI 必填；0~65535；越小优先级越高
+    priority: Option<u16>,
+
+    /// CAA 必填；0~255
+    flag: Option<u8>,
+
+    /// CAA 必填；issue/issuewild/iodef
+    tag: Option<CaaTag>,
+
+    /// SRV, URI 必填；0~65535
+    weight: Option<u16>,
+
+    /// SRV 必填；0~65535
+    port: Option<u16>,
+
+    /// CERT/SSHFP 必填（文档称 Type=integer，但示例可能是 RSA 等；这里用 String 表示更稳妥）
+    r#type: Option<&'a str>,
+
+    /// CERT 必填；0~65535
+    key_tag: Option<u16>,
+
+    /// CERT/SMIMEA/TLSA 必填（base64 或证书内容）
+    certificate: Option<&'a str>,
+
+    /// SMIMEA/TLSA 必填；0~255
+    usage: Option<u8>,
+
+    /// SMIMEA/TLSA 必填；0~255
+    selector: Option<u8>,
+
+    /// SMIMEA/TLSA 必填；0~255
+    matching_type: Option<u8>,
+
+    /// SSHFP 必填
+    fingerprint: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaaTag {
+    Issue,
+    IssueWild,
+    Iodef,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CreateRecordResponse {
+    pub request_id: String,
+    pub record_id: i64,
+}
+
+impl CreateRecord<'_> {
+    pub async fn send(&self) -> Result<CreateRecordResponse, Error> {
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
+
+        let sign_params = SignParams {
+            req_method: "POST",
+            host: &client.host,
+            query_map: self,
+            x_acs_action: "CreateRecord",
+            x_acs_version: OPENAPI_VERSION,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &OPENAPI_STYLE,
+        };
+
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| {
+                    Error::Common(format!("failed to get openapi request header: {}", e))
+                })?;
+        let header_map = into_header_map(common_headers);
+
+        let resp = client
+            .http_client
+            .post(url_)
             .headers(header_map)
             .send()
             .await?;

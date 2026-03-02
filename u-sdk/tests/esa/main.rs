@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use u_sdk::credentials::{Credentials, CredentialsProvider};
 use u_sdk::esa;
+use u_sdk::esa::dns_record::{DnsRecordType, RecordData};
 
 //region client
 #[derive(Deserialize, Debug)]
@@ -164,4 +165,24 @@ async fn get_record_test() {
         .await;
 
     println!("GetRecord Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn create_record_test() {
+    let client = get_esa_client();
+    let record_data = RecordData::builder().value("1.1.1.1").build();
+    let resp = client
+        .create_record()
+        .site_id(1234567890)
+        .record_name("a.example.com")
+        .r#type(DnsRecordType::AOrAAAA)
+        .data(record_data)
+        .comment("Test record created by u-sdk")
+        .ttl(1)
+        .build()
+        .send()
+        .await;
+
+    println!("CreateRecord Response:\n{:#?}", resp);
 }

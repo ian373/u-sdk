@@ -1,6 +1,6 @@
 use super::Error;
 use serde::de::IntoDeserializer;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 pub async fn parse_json_response<T: serde::de::DeserializeOwned>(
@@ -65,4 +65,13 @@ where
             "expected JSON object for this field",
         )),
     }
+}
+
+pub fn se_as_json_string<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    T: Serialize,
+    S: Serializer,
+{
+    let json_str = serde_json::to_string(&value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&json_str)
 }
