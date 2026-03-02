@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-03-02
+
+### Added
+
+- ESA模块添加DNS相关接口: `CreateRecord`, `DeleteRecord`, `UpdateRecord`, `ListRecords`, `GetRecord`
+
 ## [0.6.2] - 2026-01-15
 
 ### Added
