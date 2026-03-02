@@ -22,6 +22,10 @@ impl Client {
     pub fn create_record(&self) -> CreateRecordBuilder<'_> {
         CreateRecord::builder(self)
     }
+
+    pub fn delete_record(&self) -> DeleteRecordBuilder<'_> {
+        DeleteRecord::builder(self)
+    }
 }
 
 //region ListRecords request
@@ -482,6 +486,57 @@ impl CreateRecord<'_> {
             host: &client.host,
             query_map: self,
             x_acs_action: "CreateRecord",
+            x_acs_version: OPENAPI_VERSION,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &OPENAPI_STYLE,
+        };
+
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| {
+                    Error::Common(format!("failed to get openapi request header: {}", e))
+                })?;
+        let header_map = into_header_map(common_headers);
+
+        let resp = client
+            .http_client
+            .post(url_)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let data = parse_json_response(resp).await?;
+        Ok(data)
+    }
+}
+// endregion
+
+// region DeleteRecord
+/// [DeleteRecord](https://help.aliyun.com/zh/edge-security-acceleration/esa/api-esa-2024-09-10-deleterecord)
+#[derive(Builder, Debug)]
+pub struct DeleteRecord<'a> {
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+    pub(crate) record_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteRecordResponse {
+    pub request_id: String,
+}
+
+impl DeleteRecord<'_> {
+    pub async fn send(&self) -> Result<DeleteRecordResponse, Error> {
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
+
+        let sign_params = SignParams {
+            req_method: "POST",
+            host: &client.host,
+            query_map: HashMap::from([("RecordId", self.record_id)]),
+            x_acs_action: "DeleteRecord",
             x_acs_version: OPENAPI_VERSION,
             x_acs_security_token: creds.sts_security_token.as_deref(),
             request_body: None,

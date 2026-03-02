@@ -186,3 +186,17 @@ async fn create_record_test() {
 
     println!("CreateRecord Response:\n{:#?}", resp);
 }
+
+#[tokio::test]
+#[ignore]
+async fn delete_record_test() {
+    let client = get_esa_client();
+    let resp = client
+        .delete_record()
+        .record_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("DeleteRecord Response:\n{:#?}", resp);
+}
