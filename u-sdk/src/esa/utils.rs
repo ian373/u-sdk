@@ -1,10 +1,9 @@
 use super::Error;
-use serde::de::IntoDeserializer;
-use serde::{Deserialize, Deserializer};
+use serde::de::{DeserializeOwned, IntoDeserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 
-pub async fn parse_json_response<T: serde::de::DeserializeOwned>(
-    resp: reqwest::Response,
-) -> Result<T, Error> {
+pub async fn parse_json_response<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T, Error> {
     let status = resp.status();
 
     if !status.is_success() {
@@ -20,6 +19,10 @@ pub async fn parse_json_response<T: serde::de::DeserializeOwned>(
 
 // 有些字段时在没有的情况下返回的json，该字段不是不存在，而是为空字符串`""`，需要特殊处理
 // 这个方法处理这种情况
+/// 1. 字段为空字符串 `""` 时，反序列化为 `None`
+/// 2. 字段为非空字符串时，尝试将其反序列化为 T
+///
+/// 在这个函数中字段不可能不存在，因为字段不存在时 serde 不会进入此函数
 pub fn de_option_empty_string_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
@@ -39,4 +42,34 @@ where
             T::deserialize(s.into_deserializer()).map(Some)
         }
     }
+}
+
+/// 只接受 JSON 对象，如果是空对象 `{}` 则返回 None，否则反序列化为 T
+pub fn de_non_empty_object<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        // 如果是空对象 {} → None
+        Value::Object(map) if map.is_empty() => Ok(None),
+        // 如果是非空对象 → 反序列化为 T
+        Value::Object(_) => T::deserialize(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        // 其他 JSON 类型（如字符串、数组等）→ 错误
+        _ => Err(serde::de::Error::custom(
+            "expected JSON object for this field",
+        )),
+    }
+}
+
+pub fn se_as_json_string<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    T: Serialize,
+    S: Serializer,
+{
+    let json_str = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&json_str)
 }

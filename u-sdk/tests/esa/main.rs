@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use u_sdk::credentials::{Credentials, CredentialsProvider};
 use u_sdk::esa;
+use u_sdk::esa::dns_record::{DnsRecordType, RecordData};
 
 //region client
 #[derive(Deserialize, Debug)]
@@ -136,4 +137,83 @@ async fn update_origin_protection_ip_white_list_test() {
         .await;
 
     println!("UpdateOriginProtectionIpWhiteList Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn list_records_test() {
+    let client = get_esa_client();
+    let resp = client
+        .list_records()
+        .site_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("ListRecords Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn get_record_test() {
+    let client = get_esa_client();
+    let resp = client
+        .get_record()
+        .record_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("GetRecord Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn create_record_test() {
+    let client = get_esa_client();
+    let record_data = RecordData::builder().value("1.1.1.1").build();
+    let resp = client
+        .create_record()
+        .site_id(1234567890)
+        .record_name("a.example.com")
+        .r#type(DnsRecordType::AOrAAAA)
+        .data(record_data)
+        .comment("Test record created by u-sdk")
+        .ttl(1)
+        .build()
+        .send()
+        .await;
+
+    println!("CreateRecord Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn delete_record_test() {
+    let client = get_esa_client();
+    let resp = client
+        .delete_record()
+        .record_id(1234567890)
+        .build()
+        .send()
+        .await;
+
+    println!("DeleteRecord Response:\n{:#?}", resp);
+}
+
+#[tokio::test]
+#[ignore]
+async fn update_record_test() {
+    let client = get_esa_client();
+    let record_data = RecordData::builder().value("2.2.2.2").build();
+    let resp = client
+        .update_record()
+        .record_id(1234567890)
+        .data(record_data)
+        .comment("Test record updated by u-sdk")
+        .build()
+        .send()
+        .await;
+
+    println!("UpdateRecord Response:\n{:#?}", resp);
 }
