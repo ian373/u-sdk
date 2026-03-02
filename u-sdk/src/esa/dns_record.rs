@@ -26,6 +26,10 @@ impl Client {
     pub fn delete_record(&self) -> DeleteRecordBuilder<'_> {
         DeleteRecord::builder(self)
     }
+
+    pub fn update_record(&self) -> UpdateRecordBuilder<'_> {
+        UpdateRecord::builder(self)
+    }
 }
 
 //region ListRecords request
@@ -445,6 +449,9 @@ pub struct RecordData<'a> {
     /// CERT 必填；0~65535
     key_tag: Option<u16>,
 
+    /// 记录所采用的加密算法，范围为0~255。CERT、SSHFP 记录独有
+    algorithm: Option<u8>,
+
     /// CERT/SMIMEA/TLSA 必填（base64 或证书内容）
     certificate: Option<&'a str>,
 
@@ -537,6 +544,87 @@ impl DeleteRecord<'_> {
             host: &client.host,
             query_map: HashMap::from([("RecordId", self.record_id)]),
             x_acs_action: "DeleteRecord",
+            x_acs_version: OPENAPI_VERSION,
+            x_acs_security_token: creds.sts_security_token.as_deref(),
+            request_body: None,
+            style: &OPENAPI_STYLE,
+        };
+
+        let (common_headers, url_) =
+            get_openapi_request_header(&creds.access_key_secret, &creds.access_key_id, sign_params)
+                .map_err(|e| {
+                    Error::Common(format!("failed to get openapi request header: {}", e))
+                })?;
+        let header_map = into_header_map(common_headers);
+
+        let resp = client
+            .http_client
+            .post(url_)
+            .headers(header_map)
+            .send()
+            .await?;
+
+        let data = parse_json_response(resp).await?;
+        Ok(data)
+    }
+}
+// endregion
+
+// region UpdateRecord
+#[serde_with::skip_serializing_none]
+#[derive(Builder, Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct UpdateRecord<'a> {
+    #[serde(skip_serializing)]
+    #[builder(start_fn)]
+    pub(crate) client: &'a Client,
+
+    record_id: i64,
+
+    /// 记录的过期时间，单位秒。范围为30~86400，或为 1。当取值为 1 时，表示记录的过期时间为自动。
+    ttl: Option<u32>,
+
+    /// 只有 CNAME 或 A/AAAA 记录可开启；true/false
+    proxied: Option<bool>,
+
+    /// DNS 记录类型：A/AAAA、CNAME、TXT 等
+    r#type: Option<DnsRecordType>,
+
+    /// 仅 CNAME 添加时要求填写；不传默认 Domain
+    source_type: Option<SourceType>,
+
+    /// proxied=true 时必填；proxied=false 时不需要
+    biz_name: Option<BizName>,
+
+    #[serde(serialize_with = "se_as_json_string")]
+    data: RecordData<'a>,
+
+    /// 备注，最大 100 字符
+    comment: Option<&'a str>,
+
+    /// CNAME 源站鉴权信息（主要用于 SourceType=OSS/S3 等场景）
+    auth_conf: Option<AuthConf>,
+
+    /// 回源 HOST 策略，仅 CNAME 生效
+    host_policy: Option<HostPolicy>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct UpdateRecordResponse {
+    pub request_id: String,
+}
+
+impl UpdateRecord<'_> {
+    pub async fn send(&self) -> Result<UpdateRecordResponse, Error> {
+        let client = self.client;
+        let creds = client.credentials_provider.load().await?;
+
+        let sign_params = SignParams {
+            req_method: "POST",
+            host: &client.host,
+            query_map: self,
+            x_acs_action: "UpdateRecord",
             x_acs_version: OPENAPI_VERSION,
             x_acs_security_token: creds.sts_security_token.as_deref(),
             request_body: None,

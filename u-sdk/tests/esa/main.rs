@@ -200,3 +200,20 @@ async fn delete_record_test() {
 
     println!("DeleteRecord Response:\n{:#?}", resp);
 }
+
+#[tokio::test]
+#[ignore]
+async fn update_record_test() {
+    let client = get_esa_client();
+    let record_data = RecordData::builder().value("2.2.2.2").build();
+    let resp = client
+        .update_record()
+        .record_id(1234567890)
+        .data(record_data)
+        .comment("Test record updated by u-sdk")
+        .build()
+        .send()
+        .await;
+
+    println!("UpdateRecord Response:\n{:#?}", resp);
+}
