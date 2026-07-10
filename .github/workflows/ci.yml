@@ -1,4 +1,4 @@
-name: Rust CI (workspace)
+name: CI
 
 permissions:
     contents: read
@@ -6,13 +6,12 @@ permissions:
 on:
     pull_request:
         branches: [ main ]
-        types: [ opened, synchronize, reopened, ready_for_review ]
     push:
         branches: [ main ]
     workflow_dispatch:
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+    group: ci-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
 env:
@@ -26,112 +25,95 @@ env:
     RUSTDOCFLAGS: -Dwarnings
 
 jobs:
-    # 1. Lint（fmt + clippy），只跑一次 Linux/stable，保证代码质量
     lint:
-        name: Lint (fmt + clippy, workspace)
-        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+        name: fmt + clippy (workspace)
         runs-on: ubuntu-latest
+        timeout-minutes: 30
 
         steps:
-            -   name: Checkout
-                uses: actions/checkout@v5
+            -   uses: actions/checkout@v6
 
-            # 推荐组合：先装好 toolchain，再用 rust-cache 智能缓存
-            -   name: Setup Rust (stable + clippy + rustfmt)
-                uses: dtolnay/rust-toolchain@stable
+            -   name: Install Rust (from rust-toolchain.toml)
+                uses: actions-rust-lang/setup-rust-toolchain@v1
                 with:
-                    components: clippy, rustfmt
+                    cache: true
+                    rustflags: ""
 
-            -   name: Cache cargo/target
-                uses: Swatinem/rust-cache@v2
-
-            -   name: Format check
+            -   name: cargo fmt --check
                 run: cargo fmt --all -- --check
 
-            -   name: Clippy (deny warnings, workspace + all features)
-                run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+            -   name: cargo clippy (deny warnings)
+                run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
-    # 2. 测试（含所有 feature），跨平台矩阵
     test:
-        name: Test (workspace, nextest)
-        needs: [ lint ]                 # lint 过了再测，节省一点资源
-        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+        name: test (${{ matrix.os }}, nextest)
+        needs: [ lint ]
         strategy:
             fail-fast: false
             matrix:
                 os: [ ubuntu-latest, macos-latest, windows-latest ]
 
         runs-on: ${{ matrix.os }}
+        timeout-minutes: 60
 
         steps:
-            -   name: Checkout
-                uses: actions/checkout@v5
+            -   uses: actions/checkout@v6
 
-            -   name: Setup Rust (stable)
-                uses: dtolnay/rust-toolchain@stable
+            -   name: Install Rust (from rust-toolchain.toml)
+                uses: actions-rust-lang/setup-rust-toolchain@v1
+                with:
+                    cache: true
+                    rustflags: ""
 
-            -   name: Cache cargo/target
-                uses: Swatinem/rust-cache@v2
-
-            # 安装 cargo-nextest（现代测试跑器，比 cargo test 更快）
             -   name: Install cargo-nextest
                 uses: taiki-e/install-action@nextest
 
-            # 确认禁用默认 feature 时也能编译/通过
-            -   name: Test (no default features)
-                # 如果没有任何测试会返回error，添加一个--no-tests=warn来调整一下行为
-                run: cargo nextest run --workspace --no-default-features --no-tests=warn
+            -   name: tests (no default features)
+                run: cargo nextest run --workspace --all-targets --no-default-features --locked --no-tests=warn
 
-            # 再跑一遍 all-features，覆盖 u-sdk 的所有可选功能
-            -   name: Test (all features)
-                run: cargo nextest run --workspace --all-features
+            -   name: tests (all features)
+                run: cargo nextest run --workspace --all-targets --all-features --locked --no-tests=warn
 
     # 3. 文档构建，确保 docs.rs 风格的文档可以正常生成
     doc:
-        name: Doc (workspace, all features)
+        name: doc + doctest (workspace)
         needs: [ lint ]
-        if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
         runs-on: ubuntu-latest
+        timeout-minutes: 30
 
         steps:
-            -   name: Checkout
-                uses: actions/checkout@v5
+            -   uses: actions/checkout@v6
 
-            -   name: Setup Rust (stable)
-                uses: dtolnay/rust-toolchain@stable
+            -   name: Install Rust (from rust-toolchain.toml)
+                uses: actions-rust-lang/setup-rust-toolchain@v1
+                with:
+                    cache: true
+                    rustflags: ""
 
-            -   name: Cache cargo/target
-                uses: Swatinem/rust-cache@v2
+            -   name: cargo doc (deny warnings)
+                run: cargo doc --workspace --all-features --no-deps --locked --verbose
 
-            -   name: Build docs (deny warnings)
-                run: cargo doc --workspace --all-features --no-deps --verbose
+            -   name: doctests
+                run: cargo test --doc --workspace --all-features --locked
 
-            # nextest 目前不支持 doctest，需要单独跑一遍 cargo test --doc
-            -   name: Doc tests
-                run: cargo test --doc --workspace --all-features
-
-    # 4. MSRV 检查（只在 push 时跑，避免拖慢每个 PR）
     msrv:
-        name: MSRV check (minimum supported Rust)
-        if: github.event_name == 'push'
+        name: MSRV check (Rust 1.92.0)
         runs-on: ubuntu-latest
-        # MSRV 阶段一般不强制 -Dwarnings，防止旧编译器多出新 lint 导致失败
+        timeout-minutes: 30
         env:
             RUSTFLAGS: ""
             RUSTDOCFLAGS: ""
 
         steps:
-            -   name: Checkout
-                uses: actions/checkout@v5
+            -   uses: actions/checkout@v6
 
-            -   name: Setup Rust (MSRV)
-                # 编译项目使用的rust版本，比如在 Cargo.toml 里加上 `rust-version = "1.89.0"`
-                uses: dtolnay/rust-toolchain@master
+            # Keep this version in sync with package.rust-version in both Cargo.toml files.
+            -   name: Install Rust
+                uses: actions-rust-lang/setup-rust-toolchain@v1
                 with:
-                    toolchain: 1.89.0
+                    toolchain: 1.92.0
+                    cache: true
+                    rustflags: ""
 
-            -   name: Cache cargo/target
-                uses: Swatinem/rust-cache@v2
-
-            -   name: Check builds on MSRV
-                run: cargo check --workspace --all-features
+            -   name: Check MSRV
+                run: cargo check --workspace --all-targets --all-features --locked

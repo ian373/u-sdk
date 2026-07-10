@@ -1,6 +1,6 @@
 [workspace]
 members = ["u-sdk", "u-sdk-common"]
-resolver = "2"
+resolver = "3"
 
 [workspace.dependencies]
 u-sdk-common = { version = "0.2.0", path = "u-sdk-common" }
