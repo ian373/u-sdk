@@ -10,6 +10,8 @@ pub enum Error {
     API { code: StatusCode, body: String },
     #[error("use reqwest error:\n {0}")]
     Reqwest(#[from] reqwest::Error),
+    #[error("error: {0}")]
+    Other(String),
 }
 
 #[derive(Builder, Serialize)]
@@ -64,11 +66,20 @@ pub struct Client {
 #[bon]
 impl Client {
     #[builder]
-    pub fn new(uid: i32, key: &str) -> Self {
-        Self {
-            url: format!("https://{}.push.ft07.com/send/{}.send", uid, key),
+    pub fn new(send_key: &str) -> Result<Self, Error> {
+        let uid = send_key
+            .strip_prefix("sctp")
+            .and_then(|send_key| send_key.split_once('t'))
+            .filter(|(uid, key)| {
+                !uid.is_empty() && uid.bytes().all(|byte| byte.is_ascii_digit()) && !key.is_empty()
+            })
+            .map(|(uid, _)| uid)
+            .ok_or_else(|| Error::Other("invalid send key".to_string()))?;
+
+        Ok(Self {
+            url: format!("https://{}.push.ft07.com/send/{}.send", uid, send_key),
             http_client: reqwest::Client::new(),
-        }
+        })
     }
 
     pub fn send_msg(&self) -> SendMsgBuilder<'_> {

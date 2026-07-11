@@ -1,2 +1,1 @@
-uid = 1234
-key = "server chan send key"
+send_key = "sctp1234tserver_chan_send_key"

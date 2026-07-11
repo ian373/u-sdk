@@ -21,8 +21,7 @@ sdk包含有以下应用部分功能：
 
 ```toml
 # config.toml
-uid = 1234
-key = "server chan send key"
+send_key = "sctp1234tserver_chan_send_key"
 ```
 
 在`u-sdk/tests/server_chan/main.rs`中，选择一个测试用例并尝试修改：
@@ -31,7 +30,10 @@ key = "server chan send key"
 #[tokio::test]
 async fn server_chan_test() {
     let conf = Config::get_conf();
-    let client = Client::builder().uid(conf.uid).key(&conf.key).build();
+    let client = Client::builder()
+        .send_key(&conf.send_key)
+        .build()
+        .unwrap();
 
     let resp = client
         .send_msg()
