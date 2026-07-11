@@ -2,75 +2,86 @@ name: Publish crates (u-sdk workspace)
 
 permissions:
     contents: read
+    id-token: write
 
 on:
-    # 手动触发，并带一个输入参数：要发布哪个 crate
     workflow_dispatch:
         inputs:
             target:
                 description: "选择要发布的 crate"
                 required: true
-                default: "both"
+                default: "u-sdk"
                 type: choice
                 options:
-                    - both          # 同时发布 u-sdk-common 和 u-sdk
-                    - u-sdk         # 只发布 u-sdk
-                    - u-sdk-common  # 只发布 u-sdk-common
+                    - u-sdk
+                    - u-sdk-common
+                    - both
 
 concurrency:
-    group: publish-${{ github.ref }}
-    cancel-in-progress: true
+    group: publish-crates
+    cancel-in-progress: false
 
 env:
     CARGO_TERM_COLOR: always
     RUST_BACKTRACE: 1
+    # ci 环境不需要增量编译
+    CARGO_INCREMENTAL: 0
 
 jobs:
     publish:
-        name: Publish ${{ github.event.inputs.target }} to crates.io
+        name: Publish ${{ inputs.target }} to crates.io
+        if: github.ref == 'refs/heads/main'
+        environment: release
         runs-on: ubuntu-latest
+        timeout-minutes: 60
 
         steps:
-            -   name: Checkout
-                uses: actions/checkout@v5
+            -   uses: actions/checkout@v6
+
+            -   name: Install Rust (from rust-toolchain.toml)
+                uses: actions-rust-lang/setup-rust-toolchain@v1
                 with:
-                    # 默认情况下（不写 fetch-depth，或写 1）：actions/checkout 会只 clone 当前触发 workflow 的那一次提交 (即一个 shallow clone，只拿最新 commit)
-                    # 当你设 fetch-depth: 0 时，意味着让 checkout 拉取完整的 repository 历史 —— 包括所有 commit、所有分支、所有 tags
-                    fetch-depth: 0
+                    cache: true
+                    rustflags: ""
 
-            -   name: Setup Rust (stable)
-                uses: dtolnay/rust-toolchain@stable
-
-            -   name: Cache cargo/target
-                uses: Swatinem/rust-cache@v2
-
-            # ---------- 第一阶段：u-sdk-common（如果需要）----------
-
-            # 先 dry-run u-sdk-common
             -   name: Dry run publish u-sdk-common
-                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk-common' }}
-                run: cargo publish -p u-sdk-common --dry-run
+                if: inputs.target == 'both' || inputs.target == 'u-sdk-common'
+                run: cargo publish -p u-sdk-common --dry-run --locked
 
-            # 真正发布 u-sdk-common
+            # https://crates.io/docs/trusted-publishing
+            -   name: Authenticate with crates.io
+                id: auth
+                uses: rust-lang/crates-io-auth-action@v1
+
             -   name: Publish u-sdk-common
-                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk-common' }}
+                if: inputs.target == 'both' || inputs.target == 'u-sdk-common'
                 env:
-                    CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-                run: cargo publish -p u-sdk-common
+                    CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+                run: cargo publish -p u-sdk-common --locked
 
-            # 如果后面还要发 u-sdk，就等一会儿让 crates.io 索引更新
-            -   name: Wait for registry index to update
-                if: ${{ github.event.inputs.target == 'both' }}
-                run: sleep 60
-
-            # ---------- 第二阶段：u-sdk（如果需要）----------
+            -   name: Wait for u-sdk-common to become available
+                if: inputs.target == 'both'
+                shell: bash
+                run: |
+                    version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "u-sdk-common") | .version')
+                    for attempt in {1..12}; do
+                        if curl --fail --silent "https://index.crates.io/u-/sd/u-sdk-common" \
+                            | jq --exit-status --arg version "${version}" 'select(.vers == $version)' > /dev/null; then
+                            echo "u-sdk-common ${version} is available"
+                            exit 0
+                        fi
+                        echo "Waiting for u-sdk-common ${version} (${attempt}/12)"
+                        sleep 10
+                    done
+                    echo "::error::u-sdk-common ${version} is not available after 120 seconds"
+                    exit 1
 
             -   name: Dry run publish u-sdk
-                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
-                run: cargo publish -p u-sdk --dry-run
+                if: inputs.target == 'both' || inputs.target == 'u-sdk'
+                run: cargo publish -p u-sdk --dry-run --locked
 
             -   name: Publish u-sdk
-                if: ${{ github.event.inputs.target == 'both' || github.event.inputs.target == 'u-sdk' }}
+                if: inputs.target == 'both' || inputs.target == 'u-sdk'
                 env:
-                    CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-                run: cargo publish -p u-sdk
+                    CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+                run: cargo publish -p u-sdk --locked

@@ -5,8 +5,7 @@ use u_sdk::server_chan::*;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub uid: i32,
-    pub key: String,
+    pub send_key: String,
 }
 
 impl Config {
@@ -20,7 +19,7 @@ impl Config {
 #[ignore]
 async fn server_chan_test() {
     let conf = Config::get_conf();
-    let client = Client::builder().uid(conf.uid).key(&conf.key).build();
+    let client = Client::builder().send_key(&conf.send_key).build().unwrap();
 
     let resp = client
         .send_msg()
